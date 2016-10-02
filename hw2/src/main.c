@@ -1,9 +1,9 @@
 /* UCSB CS240A, Winter Quarter 2014
  * Main and supporting functions for the Conjugate Gradient Solver on a 5-point stencil
  *
- * NAMES:
- * PERMS:
- * DATE:
+ * NAMES: Tanmoy Sanyal
+ * PERMS: 7550049
+ * DATE: 
  */
 #include "mpi.h"
 #include "hw2harness.h"
@@ -13,6 +13,11 @@
 double* load_vec( char* filename, int* k );
 void save_vec( int k, double* x );
 
+// cgsolve and related routines //
+void cgsolve();
+void matvec();
+double ddot(double* v, double* w);
+void daxpy(double* v, double* w, double alpha, double beta);
 
 
 int main( int argc, char* argv[] ) {
@@ -25,8 +30,12 @@ int main( int argc, char* argv[] ) {
 	double* x;
 	double time;
 	double t1, t2;
-	
+	int comm_rank, p;
+
 	MPI_Init( &argc, &argv );
+ 	MPI_Comm_size(MPI_COMM_WORLD, &p);
+ 	MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
 	
 	// Read command line args.
 	// 1st case runs model problem, 2nd Case allows you to specify your own b vector
@@ -83,6 +92,19 @@ int main( int argc, char* argv[] ) {
  * Supporting Functions
  *
  */
+
+ double ddot(double* v, double* w, int n_v) {
+ 	int i;
+ 	double dotp;
+
+ 	dotp = 0.0
+ 	for (i = 0; i < n; i++)
+ 		dotp += v[i] * w[i]
+ 	return dotp
+ }
+
+double* daxpy(double* v, double* w, int n_v, double alpha, double beta)
+
 
 // Load Function
 // NOTE: does not distribute data across processors

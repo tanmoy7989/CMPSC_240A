@@ -1,0 +1,211 @@
+help cgsolve
+  cgsolve : Solve a linear system A*x=b by conjugate gradients
+ 
+  [x, niters, relres] = cgsolve(n, @Atimes, @getb);
+ 
+  This routine solves the linear system A*x=b for x.
+  The matrix A is not given explicitly, but rather as a
+  user-supplied function that multiplies A by a given vector.
+  The right-hand side b is given by a user-supplied function
+  that returns individual elements of b.
+ 
+  Inputs:
+    n          integer: dimension of the matrix and vectors
+    Atimes     function: y = Atimes(z,n) should return A*z
+    getb       function: bi = getb(i,n) should return b(i)
+  Outputs:
+    x          vector: computed solution to A*x=b
+    niters     integer: number of CG iterations performed
+    relres     double: relative residual norm, defined as
+                       norm(b-A*x)/norm(b)
+ 
+  The CG algorithm requires the matrix to be symmetric and
+  positive definite, though we do not check this.  We iterate
+  either until the relative residual is less than 10^-6
+  or for at most max(1000,10*sqrt(n)) iterations.  A more
+  robust code would let the user specify the stopping condition.
+ 
+  This is a sequential Matlab template -- CS240A homework 2 is 
+  to implement this in parallel, including an "Atimes" routine
+  that applies the 5-point model problem to a vector in parallel
+  without ever actually forming the matrix.  In the parallel
+  code, the vectors b, x, r, and d will all be distributed across 
+  processors, and all the operations on vectors will be done by 
+  calls to subroutines you write using MPI.
+ 
+  John R. Gilbert     3 April 2011
+
+[x,niters,relres] = cgsolve(9,@Atimes,@getb)
+{??? Undefined function or method 'sqrt' for input arguments of type 'function_handle'.
+
+Error in ==> <a href="matlab: opentoline('/Users/gilbert/Documents/CS240aWinter2014/Assignments/hw2/matlab/cgsolve.m',39,0)">cgsolve at 39</a>
+maxiters = max(1000,5*sqrt(n));
+} 
+edit cgsolve
+[x,niters,relres] = cgsolve(@Atimes,@getb,n)
+{??? Undefined function or variable 'n'.
+} 
+[x,niters,relres] = cgsolve(@Atimes,@getb,9)
+{??? Undefined function or method 'getb' for input arguments of type 'double'.
+
+Error in ==> <a href="matlab: opentoline('/Users/gilbert/Documents/CS240aWinter2014/Assignments/hw2/matlab/cgsolve.m',42,0)">cgsolve at 42</a>
+    b(i) = getb(i,n);
+} 
+whos
+  Name       Size            Bytes  Class    Attributes
+
+  dfile      1x21               42  char               
+
+waht
+{??? Undefined function or variable 'waht'.
+} 
+what
+
+M-files in the current directory /Users/gilbert/Documents/CS240aWinter2014/Assignments/hw2/matlab
+
+blockdiags     cgtest         modelmatvec    
+cgsolve        grid5          startup        
+
+help cgtest
+  cgtest : Test cgsolve on the model problem
+ 
+  cgtest(k)  creates a random right-hand-side b with k^2
+             elements, then runs "cgsolve" to solve A*x=b
+             where A is the 5-point model problem.
+
+cgtest(3)
+niters =
+     5
+relres =
+   6.9804e-18
+edit cgtest
+cgtest(3)
+xcg =
+    0.5082
+    0.4598
+    0.5123
+    0.6080
+    0.6612
+    0.6189
+    0.3056
+    0.4726
+    0.5018
+niters =
+     5
+relres =
+   6.8310e-17
+cgtest(3)
+xcg =
+    0.4852
+    0.5876
+    0.4016
+    0.0219
+    0.5200
+    0.5720
+    0.4157
+    0.4641
+    0.4551
+niters =
+     1
+relres =
+    0.7256
+what
+
+M-files in the current directory /Users/gilbert/Documents/CS240aWinter2014/Assignments/hw2/matlab
+
+blockdiags     cgtest         modelmatvec    
+cgsolve        grid5          startup        
+
+edit modelmatvec
+which getb
+'getb' not found.
+which getb
+'getb' not found.
+cgtest(3)
+xcg =
+    0.6196
+    1.2391
+    1.8587
+    2.4783
+    3.0978
+    3.7174
+    4.3370
+    4.9565
+    5.5761
+niters =
+     1
+relres =
+    0.5158
+cgtest(3)
+b =
+    0.6948
+    0.3171
+    0.9502
+    0.0344
+    0.4387
+    0.3816
+    0.7655
+    0.7952
+    0.1869
+xcg =
+    0.6196
+    1.2391
+    1.8587
+    2.4783
+    3.0978
+    3.7174
+    4.3370
+    4.9565
+    5.5761
+niters =
+     1
+relres =
+    0.5158
+cgtest(3)
+b =
+     1
+     2
+     3
+     4
+     5
+     6
+     7
+     8
+     9
+xcg =
+    0.6196
+    1.2391
+    1.8587
+    2.4783
+    3.0978
+    3.7174
+    4.3370
+    4.9565
+    5.5761
+niters =
+     1
+relres =
+    0.5158
+clc
+what
+
+M-files in the current directory /Users/gilbert/Documents/CS240aWinter2014/Assignments/hw2/matlab
+
+blockdiags     cgtest         modelmatvec    
+cgsolve        grid5          startup        
+
+edit cgtest
+what
+
+M-files in the current directory /Users/gilbert/Documents/CS240aWinter2014/Assignments/hw2/matlab
+
+blockdiags     cgtest         modelmatvec    
+cgsolve        grid5          startup        
+
+ls
+blockdiags.m		cgtest.m~		modelmatvec.m
+cgsolve.m		diary-21-Jan-2014.txt	readme.text
+cgtest.m		grid5.m			startup.m
+
+edit modelmatvec
+exit
