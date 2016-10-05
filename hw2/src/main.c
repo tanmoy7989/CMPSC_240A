@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 double* load_vec( char*, int* );
-void save_vec( int, int, int, int, double, double, double* );
+void save_vec( int, int, int, int, int, double, double, double* );
 
 #define ROOT 0
 double* gen_B( int, int, int, int* );
@@ -114,7 +114,7 @@ int main( int argc, char* argv[] ) {
 	if ( writeOutX){
 		int ii;
 		for (ii = 0; ii < p; ++ii){
-			if (comm_rank == ii) save_vec(comm_rank, BLOCK_SIZE, k, niters, t2-t1, relnorm, x );
+			if (comm_rank == ii) save_vec(comm_rank, p, BLOCK_SIZE, k, niters, t2-t1, relnorm, x );
 			MPI_Barrier(MPI_COMM_WORLD); // prevent other procs from writing before this proc has finished
 		}
 	}
@@ -194,6 +194,19 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 
 	// ghost layers
 	double *w_top, *w_bottom;
+	double neigh_top, neigh_bottom, neigh_left, neigh_right;
+
+	// single_proc
+	if (p == 1){
+		for (i = 0; i < BLOCK_SIZE; i++){
+			if (i % k == 0) neigh_left = 0.0; else neigh_left = w[i-1];
+			if ( (i+1) % k == 0) neigh_right = 0.0; else neigh_right = w[i+1];
+			if (i < k) neigh_top = 0.0; else neigh_top = w[i-k];
+			if (i >= BLOCK_SIZE-k) neigh_bottom = 0.0; else neigh_bottom = w[i+k];
+			v[i] = 4*w[i] - neigh_left - neigh_right - neigh_top - neigh_bottom;
+			}
+		return v;
+	}
 
 	/*w_top refers to top row of current proc inherited from neigh proc
 	w_bottom refers to bottom row of current proc inherited from neigh proc*/
@@ -246,7 +259,6 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 	}
 
 	// apply 5 point stencil
-	double neigh_top, neigh_bottom, neigh_left, neigh_right;
 	for (i = 0; i < BLOCK_SIZE; i++){
 		if (i % k == 0) neigh_left = 0.0; else neigh_left = w[i-1];
 
@@ -311,15 +323,15 @@ double* load_vec( char* filename, int* k ) {
 
 
 // Save a vector to a file (include data about k, niters, norm and time_elapsed)
-void save_vec( int comm_rank, int BLOCK_SIZE, int k, int niters, double delta_t, double norm, double* x ) { 
+void save_vec( int comm_rank, int p, int BLOCK_SIZE, int k, int niters, double delta_t, double norm, double* x ) { 
 	FILE* oFile;
 	int i;
 
 	oFile = fopen("xApprox.txt","a");
 	
 	if (comm_rank == ROOT){
-		fprintf( oFile, "#k\tniters\tnorm\tdelta_t\n" );
-		fprintf( oFile, "%d\t%d\t%lf\t%lf\n", k, niters, norm, delta_t );
+		fprintf( oFile, "#k\tp\tniters\tnorm\tdelta_t\n" );
+		fprintf( oFile, "%d\t%d\t%d\t%lf\t%lf\n", k, p, niters, norm, delta_t );
 	}
 	
 	for (i = 0; i < BLOCK_SIZE; i++) { 
