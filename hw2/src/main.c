@@ -23,9 +23,8 @@ double* matvec( int, int, int, int, double* );
 int main( int argc, char* argv[] ) {
 	int writeOutX = 0;
 	int n, k;
-	int maxiterations = 3;
+	int maxiterations = 1000;
 	int niters=0;
- 	double norm;
 	double* b; 
 	double* x;
 	double time;
@@ -35,9 +34,9 @@ int main( int argc, char* argv[] ) {
 	int i;
 
 	MPI_Init( &argc, &argv );
+ 	
  	MPI_Comm_size(MPI_COMM_WORLD, &p);
  	MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-
 
 	/*************************************** I/0 *************************************************/
 	// 1st case runs model problem, 2nd Case allows you to specify your own b vector
@@ -64,20 +63,20 @@ int main( int argc, char* argv[] ) {
 	/************************************ INITIALIZE VARIABLES ON EACH PROC******************************/
 	x = (double *)malloc(BLOCK_SIZE * sizeof(double) );
 	double* r = (double *)malloc(BLOCK_SIZE * sizeof(double) );
-	double* r_new = (double *)malloc(BLOCK_SIZE * sizeof(double) );
 	double* Ad = (double *)malloc(BLOCK_SIZE * sizeof(double) );
 	double* d = (double *)malloc(BLOCK_SIZE * sizeof(double) );
-	norm = 0.0;
+	
+	double alpha, beta, rtr , rtrold;
+	double relnorm = 1.0; double normb = ddot(BLOCK_SIZE, b, b);
+	
 	for (i = 0; i < BLOCK_SIZE; i++){
 		x[i] = 0.0;
 		r[i] = b[i];
-		r_new[i] = b[i];
 		d[i] = b[i];
 	}
+	rtr = ddot(BLOCK_SIZE, r, r);
 	
-    double alpha, beta, r_sq , rnew_sq;
-    int isConverged = 0;
-    double FRACTOL = 1e-3;
+    double FRACTOL = 1e-2;
     double FRACTOL_sq = FRACTOL * FRACTOL; 
 	
 
@@ -85,26 +84,23 @@ int main( int argc, char* argv[] ) {
 	// Start Timer
 	t1 = MPI_Wtime();
 
-    	while (niters < maxiterations && !isConverged){
-    		/*
+    	while (niters < maxiterations && relnorm > FRACTOL_sq){
     		// compute new step size
-    		Ad = pmatvec(d); r_sq = pddot(r, r); alpha = r_sq / pddot(d, Ad);
+    		Ad = matvec(comm_rank, p, k, BLOCK_SIZE, d); alpha = rtr / ddot(BLOCK_SIZE, d, Ad);
 
     		// update local copy of solution vector
-    		pdaxpy(1.0, alpha, loc_x, d);
+    		daxpy(BLOCK_SIZE, 1.0, alpha, x, d);
     	
     		// update local copy of residual vector
-    		pdaxpy(1.0, -alpha, r_new, Ad);
+    		daxpy(BLOCK_SIZE, 1.0, -alpha, r, Ad);
     	
     		// compute new local copy of search direction vector
-    		beta = pddot(r_new, r_new) / r_sq;
-    		for (i = 0; i < sizeof(r)/sizeof(r[0]); i++) r[i] = r_new[i];
-    		pdaxpy(1.0, beta, r, d);
+    		rtrold = rtr; rtr = ddot(BLOCK_SIZE, r, r);
+    		beta =  rtrold/ rtr;
+    		daxpy(BLOCK_SIZE, 1.0, beta, d, r);
 
     		// check norm
-    		norm = r_sq / pddot(loc_b, loc_b);
-    		if (norm < FRACTOL_sq) isConverged = 1;
-    		*/
+    		relnorm = rtr / normb;
 
     		// update iterations
     		niters++;
@@ -112,16 +108,13 @@ int main( int argc, char* argv[] ) {
  	
  	// End Timer
 	t2 = MPI_Wtime();
-	double* testprod;
-	testprod = matvec(comm_rank, p, k, BLOCK_SIZE, b);
-	daxpy(BLOCK_SIZE, 1.0, 1.0, x, testprod);
 
 	/*************************************** POST PROCESSING ***************************************/
-	// synchronized write to file 
+	// synchronized write to file w
 	if ( writeOutX){
 		int ii;
 		for (ii = 0; ii < p; ++ii){
-			if (comm_rank == ii) save_vec(comm_rank, BLOCK_SIZE, k, niters, t2-t1, norm, x );
+			if (comm_rank == ii) save_vec(comm_rank, BLOCK_SIZE, k, niters, t2-t1, relnorm, x );
 			MPI_Barrier(MPI_COMM_WORLD); // prevent other procs from writing before this proc has finished
 		}
 	}
@@ -129,18 +122,24 @@ int main( int argc, char* argv[] ) {
 	// print output on stdout from proc 0
 	if (comm_rank == ROOT){
 		printf( "\nProblem size (k): %d\n",k);
-		if(niters>0) printf( "\nNorm of the residual after %d iterations: %lf\n",niters,norm);
+		if(niters>0) printf( "\nNorm of the residual after %d iterations: %lf\n",niters,relnorm);
 		printf( "\nElapsed time during CGSOLVE: %lf\n", t2-t1);
 	}
-	
+
+	// verify solution using test harness
+	double* x_global;
+	if (comm_rank == ROOT) x_global = (double *)malloc((BLOCK_SIZE*p) * sizeof(double));
+	MPI_Gather(x, BLOCK_SIZE, MPI_DOUBLE, x_global, BLOCK_SIZE, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+
+	if (comm_rank == ROOT){
+		int correct = cs240_verify(x_global, k, t2-t1);
+		printf("Correct = %d\n", correct);
+	}
+
 	//Deallocate 
 	if(niters > 0){
-		free(b);
-		free(x);
-		free(r);
-		free(r_new);
-		free(d);
-		free(Ad);
+		free(b); free(x); free(r); free(d); free(Ad);
+		if (comm_rank == ROOT) free(x_global);
 	}
 	
 	MPI_Finalize();
@@ -157,8 +156,8 @@ double* gen_B(int comm_rank, int n, int p, int* BLOCK_SIZE){
 	*BLOCK_SIZE = (int)(n/p);
 	double* vec = (double*)malloc(*BLOCK_SIZE * sizeof(double));
 	for (i = 0; i < *BLOCK_SIZE; i++)
-		//vec[i] = cs240_getB( i+comm_rank*(*BLOCK_SIZE), n);
-		vec[i] = i + comm_rank*(*BLOCK_SIZE);
+		vec[i] = cs240_getB( i+comm_rank*(*BLOCK_SIZE), n);
+		//vec[i] = i + 3 + comm_rank*(*BLOCK_SIZE);
 	return vec;
 }
 
@@ -189,16 +188,20 @@ void daxpy(int BLOCK_SIZE, double alpha, double beta, double* v, double* w){
 // parallel matvec
 double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 	double* v = (double *)malloc(BLOCK_SIZE * sizeof (double) );
-	int i, mpierr;
+	int i;
 	int sendtag = 0; int recvtag = 0;
 	MPI_Status status;
 
+	// ghost layers
+	double *w_top, *w_bottom;
+
 	/*w_top refers to top row of current proc inherited from neigh proc
 	w_bottom refers to bottom row of current proc inherited from neigh proc*/
-	
+
 	if (comm_rank == ROOT){
 		double* sendbuf = (double *)malloc(k * sizeof(double) );
-		double* w_bottom = (double *)malloc(k * sizeof(double) );
+		w_top = NULL;
+		w_bottom = (double *)malloc(k * sizeof(double) );
 
 		// populate send buffers
 		for (i = 0; i < k; i++) sendbuf[i] = w[BLOCK_SIZE - k + i];	
@@ -207,20 +210,11 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 		MPI_Send(sendbuf, k, MPI_DOUBLE, 1, sendtag, MPI_COMM_WORLD);
 		MPI_Recv(w_bottom, k, MPI_DOUBLE, 1, recvtag, MPI_COMM_WORLD, &status);
 
-		// compute matvec using 5 point stencil
-		for (i = 0; i < BLOCK_SIZE; i++) {
-			v[i] = 4*w[i];
-			if (i % k == 0) v[i] -= w[i+1]; // left boundary
-			if ( (i+1) % k == 0) v[i] -= w[i-1]; // right boundary
-			if (i < k) v[i] -= w[i+k]; 
-			if (i > k && i < BLOCK_SIZE-k) v[i] -= (w[i-k] + w[i+k]); // middle rows
-			if (i >= BLOCK_SIZE-k && i < BLOCK_SIZE) v[i] -= w_bottom[i - BLOCK_SIZE + k]; // bottom row
-		}
-
 
 	} else if (comm_rank == p-1) {
-		double* w_top = (double *)malloc(k * sizeof(double) ); 
 		double* sendbuf = (double *)malloc(k * sizeof(double) ); 
+		w_top = (double *)malloc(k * sizeof(double) ); 
+		w_bottom = NULL;
 
 		// populate send buffers
 		for (i = 0; i < k; i++) sendbuf[i] = w[i];	
@@ -229,21 +223,12 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 		MPI_Recv(w_top, k, MPI_DOUBLE, p-2, recvtag, MPI_COMM_WORLD, &status);
 		MPI_Send(sendbuf, k, MPI_DOUBLE, p-2, sendtag, MPI_COMM_WORLD); 
 
-		// compute matvec using 5 point stencil
-		for (i = 0; i < BLOCK_SIZE; i++) {
-			v[i] = 4*w[i];
-			if (i % k == 0) v[i] -= w[i+1]; // left boundary
-			if ( (i+1) % k == 0) v[i] -= w[i-1]; // right boundary 
-			if (i < k) v[i] -= w_top[i]; // top row
-			if (i > k && i < BLOCK_SIZE-k) v[i] -= (w[i-k] + w[i+k]); // middle rows
-		}
-
 
 	} else {
 		double* sendbuf_top = (double *)malloc(k * sizeof(double) );
 		double* sendbuf_bottom = (double *)malloc(k * sizeof(double) );
-		double* w_top = (double *)malloc(k * sizeof(double) );
-		double* w_bottom = (double *)malloc(k * sizeof(double) );
+		w_top = (double *)malloc(k * sizeof(double) );
+		w_bottom = (double *)malloc(k * sizeof(double) );
 
 		// populate send buffers
 		for (i = 0; i < k; i++){
@@ -258,16 +243,31 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 		// send bottom row to next proc and receive own bottom row from next proc
 		MPI_Send(sendbuf_bottom, k, MPI_DOUBLE, comm_rank+1, sendtag, MPI_COMM_WORLD); 
 		MPI_Recv(w_bottom, k, MPI_DOUBLE, comm_rank+1, recvtag, MPI_COMM_WORLD, &status);
+	}
 
-		// compute matvec using 5 point stencil
-		for (i = 0; i < BLOCK_SIZE; i++) {
-			v[i] = 4*w[i];
-			if (i % k == 0) v[i] -= w[i+1]; // left boundary
-			if ( (i+1) % k == 0) v[i] -= w[i-1]; // right boundary
-			if (i < k) v[i] -= w_top[i]; // top row
-			if (i > k && i < BLOCK_SIZE-k) v[i] -= (w[i-k] + w[i+k]); // middle rows
-			if (i >= BLOCK_SIZE-k && i < BLOCK_SIZE) v[i] -= w_bottom[i - BLOCK_SIZE + k]; // bottom row
+	// apply 5 point stencil
+	double neigh_top, neigh_bottom, neigh_left, neigh_right;
+	for (i = 0; i < BLOCK_SIZE; i++){
+		if (i % k == 0) neigh_left = 0.0; else neigh_left = w[i-1];
+
+		if ( (i+1) % k == 0) neigh_right = 0.0; else neigh_right = w[i+1];
+
+		if (i < k){
+			if (comm_rank == ROOT) neigh_top = 0.0; else neigh_top = w_top[i];
+			if (BLOCK_SIZE > k) neigh_bottom = w[i+k];
 		}
+
+		if (i > k && i < BLOCK_SIZE-k) {
+			neigh_top = w[i-k];
+			neigh_bottom = w[i+k];
+		}
+		
+		if ( i >= BLOCK_SIZE-k && i < BLOCK_SIZE){
+			if (BLOCK_SIZE > k) neigh_top = w[i-k];
+			if (comm_rank == p-1) neigh_bottom = 0.0; else neigh_bottom = w_bottom[i-BLOCK_SIZE+k];
+		}
+		
+		v[i] = 4*w[i] - neigh_left - neigh_right - neigh_top - neigh_bottom;
 	}
 
 	return v;
