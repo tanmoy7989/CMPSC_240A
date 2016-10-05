@@ -34,9 +34,9 @@ for r = 1:k
     for s = 1:k
         i = (r-1)*k + s;
         v(i) = 4*w(i);
-        if r~=1, v(i) = v(i) - w(i-k), end;  % all but top row
-        if s~=1, v(i) = v(i) - w(i-1), end;  % all but left edge
-        if s~=k, v(i) = v(i) - w(i+1), end;  % all but right edge
-        if r~=k, v(i) = v(i) - w(i+k), end;  % all but bottom row
+        if r~=1, v(i) = v(i) - w(i-k);, end;  % all but top row
+        if s~=1, v(i) = v(i) - w(i-1);, end;  % all but left edge
+        if s~=k, v(i) = v(i) - w(i+1);, end;  % all but right edge
+        if r~=k, v(i) = v(i) - w(i+k);, end;  % all but bottom row
     end;
 end;
