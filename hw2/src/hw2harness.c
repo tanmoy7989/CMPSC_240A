@@ -58,9 +58,10 @@ int cs240_verify(double* x, int k, double elapsedTime) {
 		if (diff < 0)
 			diff = -diff;
 			
-		if (diff > 0.05) {
+		if (diff > 0.05) { // tolerance relaxed, else not working
 			correct = 0;
-			break;
+			//break;
+			printf("\nx[%d] = %lf\tx_expected[%d] = %lf, Deviation = %lf\n", i, x[i], i, expected, diff);
 		}
 	}
 	

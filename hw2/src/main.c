@@ -21,7 +21,7 @@ double* matvec( int, int, int, int, double* );
 
 
 int main( int argc, char* argv[] ) {
-	int writeOutX = 0;
+	int writeOutX = 0; int verifyX = 0;
 	int n, k;
 	int maxiterations = 1000;
 	int niters=0;
@@ -40,7 +40,7 @@ int main( int argc, char* argv[] ) {
 
 	/*************************************** I/0 *************************************************/
 	// 1st case runs model problem, 2nd Case allows you to specify your own b vector
-	if ( argc == 3 ) {
+	if ( argc == 4 ) {
 		k = atoi( argv[1] );
 		n = k*k;
 		//generate vector b on each proc
@@ -52,12 +52,16 @@ int main( int argc, char* argv[] ) {
 	
 	} else {
 		if (comm_rank == ROOT) {
-		printf( "\nCGSOLVE Usage: \n\t"
-			"Model Problem:\tmpirun -np [number_procs] cgsolve [k] [output_1=y_0=n]\n\t"
-			"Custom Input:\tmpirun -np [number_procs] cgsolve -i [input_filename] [output_1=y_0=n]\n\n");
+			printf( "\nCGSOLVE Usage: \n\t"
+			"Model Problem:\tmpirun -np [number_procs] cgsolve [k] [showoutput (0/1)] [verify (0/1)] \n\t"
+			"Custom Input:\tmpirun -np [number_procs] cgsolve -i [input_filename] [showoutput (0/1)] [verify (0/1)] \n\n");
 		}
+		MPI_Finalize();
+		return 1;
 	}
-	writeOutX = atoi( argv[argc-1] ); // Write X to file if true, do not write if unspecified
+	
+	writeOutX = atoi( argv[argc-2] ); // Write X to file if true
+	verifyX = atoi( argv[argc-1] ); // verify output if true (only use for small k values as this needs assembling a global vector)
 
 	
 	/************************************ INITIALIZE VARIABLES ON EACH PROC******************************/
@@ -111,7 +115,7 @@ int main( int argc, char* argv[] ) {
 
 	/*************************************** POST PROCESSING ***************************************/
 	// synchronized write to file w
-	if ( writeOutX){
+	if ( writeOutX ){
 		int ii;
 		for (ii = 0; ii < p; ++ii){
 			if (comm_rank == ii) save_vec(comm_rank, p, BLOCK_SIZE, k, niters, t2-t1, relnorm, x );
@@ -128,18 +132,20 @@ int main( int argc, char* argv[] ) {
 
 	// verify solution using test harness
 	double* x_global;
-	if (comm_rank == ROOT) x_global = (double *)malloc((BLOCK_SIZE*p) * sizeof(double));
-	MPI_Gather(x, BLOCK_SIZE, MPI_DOUBLE, x_global, BLOCK_SIZE, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+	if ( verifyX ) {
+		if (comm_rank == ROOT) x_global = (double *)malloc((BLOCK_SIZE*p) * sizeof(double));
+		MPI_Gather(x, BLOCK_SIZE, MPI_DOUBLE, x_global, BLOCK_SIZE, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
 
-	if (comm_rank == ROOT){
-		int correct = cs240_verify(x_global, k, t2-t1);
-		printf("Correct = %d\n", correct);
+		if (comm_rank == ROOT){
+			int correct = cs240_verify(x_global, k, t2-t1);
+			printf("Correct = %d\n", correct);
+		}
 	}
 
 	//Deallocate 
 	if(niters > 0){
 		free(b); free(x); free(r); free(d); free(Ad);
-		if (comm_rank == ROOT) free(x_global);
+		if (comm_rank == ROOT && verifyX) free(x_global);
 	}
 	
 	MPI_Finalize();
@@ -192,8 +198,7 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 	int sendtag = 0; int recvtag = 0;
 	MPI_Status status;
 
-	// ghost layers
-	double *w_top, *w_bottom;
+	// stencil variables
 	double neigh_top, neigh_bottom, neigh_left, neigh_right;
 
 	// single_proc
@@ -207,6 +212,9 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 			}
 		return v;
 	}
+
+	// 1 ghost layer (sort of)
+	double *w_top, *w_bottom;
 
 	/*w_top refers to top row of current proc inherited from neigh proc
 	w_bottom refers to bottom row of current proc inherited from neigh proc*/
@@ -284,7 +292,6 @@ double* matvec(int comm_rank, int p, int k, int BLOCK_SIZE, double* w){
 
 	return v;
 }
-
 
 
 // Load Function
