@@ -40,21 +40,24 @@ v & = 2(p-2) * BLOCK\_SIZE + 2 * BLOCK\_SIZE \\
 \end{figure*}
 
 \section*{Scaling analyses}
-\noindent The strong scaling experiment was run with $p = 1, 2, 4, 8, 12, 16, 24, 48, 72$ cores. Comet's compute nodes have cores that are multiples of 24, which guided this particular choice of higher $p$ values. $k = 64 * 24 = 1536$ on a single processor with 1000 CG iterations was found to take around 32 sec. With this value of k, the strong scaling looks like:
+\noindent The strong scaling experiment was run with $p = 1, 2, 4, 8, 12, 16, 24, 48, 72$ cores. Comet's compute nodes have cores that are multiples of 24, which guided this particular choice of higher $p$ values. $k = 144$ on a single processor with 1000 CG iterations was found to take around 0.26 sec. With this value of k, the strong scaling looks like:
 %
 \begin{figure*}[h]
 \centering
 \includegraphics[scale = 0.7]{strongscale.png}
-\caption{Strong scaling for $ k = 1536$}
+\caption{Strong scaling for $ k = 144$}
 \end{figure*}
-%
+
+\noindent While the time taken for $p = 1$ is much lesser than the prescribed 30 sec - 1 min, this small value of $k$ helps us diagnose an important aspect from the strong scaling plot. $k = 144$ is a relatively small sized problem when distributed across many processors and so for $p >= 24$, when the cores get distributed across two comet nodes, the speedup is affected because of latency overhead in interprocessor communication. For a sufficiently large size problem, this change would be less noticeable.
 \newpage
 \noindent The weak scaling experiment used a similar number of processors as the previous case. However the first $k$ value was set at 144. This ensures that $k^2/p$ is always an integer and the tests run fast, even with 1000 iterations of the CG loop. Subsequent value of $k$ were chosen as $144 * int(sqrt(k))$. The weak scaling is:
 %
 \begin{figure*}[h]
 \centering
 \includegraphics[scale = 0.7]{weakscale.png}
-\caption{Weak scaling}
+\caption{Weak scaling for $ k = 144, 144, 288, 288, 432, 576, 576, 864, 1152$}
 \end{figure*}
+
+\noindent In weak scaling, the problem size grows with the number of processors, which is primarily responsible for sublinear speedup. However, this also means that the problem size on each processor is tailored to be comparable to the corresponding memory requirement, which further tips the effective latency - computation balance. So latency overhead effects start appearing not across nodes but also across cores within the same node.
 
 \end{document}

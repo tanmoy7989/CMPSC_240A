@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 import math, os, sys, subprocess, time
-import numpy as np
-import matplotlib.pyplot as plt
 
 job_template = '''#!/bin/bash
 #SBATCH --job-name=%(Prefix)s
@@ -26,15 +24,15 @@ MaxCoresPerNode = 24
 exptType = sys.argv[1]
 if exptType == 'strongscale':
 	Prefix = 'strongscale'
-	pList = [1,2,4] #[1, 2, 4, 8, 12, 16, 24, 48, 72] # powers of 2 for less than 1 node and multiples of max cores per node for greater
-	kList = [ 24*64 ] * len(pList) # elapsed time for this k with p = 1 is ~ 32 sec
+	pList = [1, 2, 4, 8, 12, 16, 24, 48, 72] # powers of 2 for less than 1 node and multiples of max cores per node for greater
+	kList = [ 144 ] * len(pList)
 
 if exptType == 'weakscale':
 	# make sure that niters = 100 or some low value in main.c or this will take forever
 	Prefix = 'weakscale'
 	pList = [1, 2, 4, 8, 12, 16, 24, 48, 72]
-	factor  = 24 * 64 # this maintains k^2/p = integer (can choose the LCM of p values, but will lead to too small runtimes)
-	kList = [24 * 64]; [kList.append( factor * int(math.sqrt(p)) ) for p in pList]
+	factor  = 144 # this maintains k^2/p = integer
+	kList = [factor]; [kList.append( factor * int(math.sqrt(p)) ) for p in pList[1:] ]
 
 if not isComputed:
 	if os.path.isfile('xApprox.txt'): os.remove('xApprox.txt')
@@ -68,25 +66,10 @@ if not isComputed:
 print 'Gathering time data...'
 lines = file('xApprox.txt').readlines()
 ind = [i for i, line in enumerate(lines) if line.startswith('#k')]
-of = file('%s.dat' % exptType, 'w') ; of.write('k\tp\ttime elapsed\n')
+of = file('%s.dat' % exptType, 'w') ; of.write('#k\tp\ttime elapsed\n')
 for ii in ind:
 	l = lines[ii+1].split()
 	k = int(l[0]) ; p = int(l[1]) ; t = float(l[-1])
 	of.write('%d\t%d\t%f\n' % (k, p, t))
 of.close()
-
-# calculate metrics and plot
-figname = '%s.png' % exptType
-data = np.loadtxt('%s.dat' % exptType)
-kvals = data[:,0]; pvals = data[:,1]; tvals = data[:,2] ; t1 = tvals[0]
-par_eff = t1/(pvals * tvals)
-fig = plt.figure(figsize = (4,4), facecolor = 'w', edgecolor = 'w')
-ax1 = fig.add_subplot(1,2,1); ax2 = fig.add_subplot(1,2,2)
-ax1.plot(pvals, tvals, 'k-', linewidth = 3, marker = 'o', markersize = 6)
-ax2.plot(pvals, par_eff, linediwth = 3, marker = 'o', markersizer = 6)
-ax1.set_xlabel('number of processors', fontsize = 10); ax1.set_ylabel('elapsed time (sec)', fontsize = 10)
-ax2.set_xlabel('number of processors', fontsize = 10); ax2.set_ylabel('parallel efficiency', fontsize = 10)
-plt.savefig(figname)
-
-plt.show()
 

@@ -52,14 +52,11 @@ int main( int argc, char* argv[] ) {
 	
 	} else {
 		if (comm_rank == ROOT) {
-			printf( "\nCGSOLVE Usage: \n\t"
+		printf( "\nCGSOLVE Usage: \n\t"
 			"Model Problem:\tmpirun -np [number_procs] cgsolve [k] [showoutput (0/1)] [verify (0/1)] \n\t"
 			"Custom Input:\tmpirun -np [number_procs] cgsolve -i [input_filename] [showoutput (0/1)] [verify (0/1)] \n\n");
 		}
-		MPI_Finalize();
-		return 1;
 	}
-	
 	writeOutX = atoi( argv[argc-2] ); // Write X to file if true
 	verifyX = atoi( argv[argc-1] ); // verify output if true (only use for small k values as this needs assembling a global vector)
 
