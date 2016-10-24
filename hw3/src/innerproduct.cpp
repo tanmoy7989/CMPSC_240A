@@ -20,7 +20,7 @@
 #define COARSENESS input_coarseness
 #define ITERS 10
 
-int input_coarseness = 50;
+int input_coarseness = 100;
 
 double rec_cilkified(double * a, double * b, int n)
 {
