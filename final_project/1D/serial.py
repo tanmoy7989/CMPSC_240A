@@ -41,7 +41,7 @@ class myReplica(Replica):
 ### MAIN
 TempSet = 300.0
 x0 = 30.0 ; file('init.dat', 'w').write('%g\n' % x0)
-EquilSteps = 2e4
+EquilSteps = 1e4
 ProdSteps = 2e4
 StepFreq = 10
 
