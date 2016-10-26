@@ -19,12 +19,13 @@ class Replica(object):
 		self.DataDir = os.path.join(os.getcwd(), str(self.RInd))
 		if not os.path.isdir(self.DataDir): os.mkdir(self.DataDir)
 
+		self.StateFiles = []
+		self.EneFiles = []
+	
 	def genFiles(self):
 		if self.isEquil:
 			self.NRexIter = -1
 			if self.InitStateFile is None: self.InitStateFile = os.path.join(os.getcwd(), 'init.dat')
-			self.StateFiles = []
-			self.EneFiles = []
 			self.CurrStateFile = os.path.join(self.DataDir, 'equil.%d.trj' % self. RInd)
 			self.CurrEneFile = os.path.join(self.DataDir, 'equil.%d.ene' % self.RInd)	
 		else:
@@ -64,7 +65,14 @@ class Ensemble(list):
 		
 		self.SwapsPerCycle = len(self) if SwapsPerCycle is None else SwapsPerCycle
 		self.allAttempts = np.zeros((len(self), len(self)), np.int32)
-		self.accAttempts = np.zeros((len(self), len(self)), np.int32)  
+		self.accAttempts = np.zeros((len(self), len(self)), np.int32)
+
+		self.Verbose = Verbose
+
+	def __Update(self):
+		self.SortedTempList = sorted([Replica.Temp for Replica in self])
+		self.allAttempts = np.zeros((len(self), len(self)), np.int32)
+		self.accAttempts = np.zeros((len(self), len(self)), np.int32)
 
 	def MetHast(self, Replica1, Replica2):
 		kB = 1.0 # Boltzmann constant in kcal/mol
@@ -77,18 +85,23 @@ class Ensemble(list):
 		elif i == len(self) - 1: return [len(self) - 2]
 		else: return [i-1, i+1]
 
-	def swap(self):
-		if self.Verbose: print "Starting REX\n"
+	def swap(self, NRexIter):
+		if self.Verbose:
+			s = "\nStarting REX ITER %d\n------------------------" % NRexIter
+			print s
+		
+		self.__Update()
+
 		acclist = []
 		for  n in range(self.SwapsPerCycle):
-				if Verbose: print "Swap Cycle: %d" % n 
+				if self.Verbose: print "Cycle: %d" % n
 				i = np.random.choice(len(self)) 
-				neighs = getNeigh(i) 
-				j = neighs[0] if len(i) == 1 else np.random.choice(neighs) 
+				neighs = self.getNeigh(i) 
+				j = neighs[0] if len(neighs) == 1 else np.random.choice(neighs) 
 				
 				if acclist.__contains__((i,j)) or acclist.__contains__((j,i)): continue
 
-				Replica_i = self[i] ; Replica_j = self[j];
+				Replica_i = self[i] ; Replica_j = self[j]
 				TInd_i = self.SortedTempList.index(Replica_i.Temp) ; TInd_j = self.SortedTempList.index(Replica_j.Temp)
 				self.allAttempts[ min(TInd_i, TInd_j), max(TInd_i, TInd_j) ] += 1
 
@@ -109,56 +122,28 @@ class Ensemble(list):
 		with open(self.SwapFile, 'a') as of:
 			of.write(s)
 
-	def demux(self, TInd = 0):
-		# this is written in parallel since the state and ene files for each replica are large
-		Temp = self.SortedTempList[TInd]
-		MasterDir = os.path.join(os.getcwd(), str(Temp) + 'K')
-		if not os.path.isdir(MasterDir): os.mkdir(MasterDir)
-		MasterStateFile = os.path.join(MasterDir, str(Temp) + '.trj.txt')
-		MasterEneFile = os.path.join(MasterDir, str(Temp) + '.ene.txt')
-
-		comm = MPI.COMM_WORLD
-		rank = comm.rank
-
-		if rank == 0:
-			Walk = list(np.loadtxt(self.SwapFile)[:, TInd])
-			for NRexIter, i in enumerate(Walk):
-				Replica_StateFiles = self[i].StateFiles
-				Replica_EneFiles = self[i].EneFiles
-
-				if (rank == i + 1):
-					#TODO: get state and store it in s_state
-					#with of as open(MasterStateFile, 'a'):
-					#	of.write(s_state)
-
-					s_ene = file(Replica_EneFiles[NRexIter], 'r').read()
-					with open(MasterEneFile, 'a') as of:
-						of.write(s_ene)
-
-					comm.Barrier()
-
 
 	def getStats(self):
 		# this is written in serial since the data used is relatively small
 		self.StatFile = os.path.join(os.getcwd(), 'statistics.txt')
 		self.WalkFile = os.path.join(os.getcwd(), 'random_walk.txt')
 		
-		if self.Verbose: print "Calculating acceptance ratios..."	
+		if self.Verbose: print "\nCalculating acceptance ratios..."	
 		of = open(self.StatFile, 'w')
 		for i in range(len(self)):
 			for j in range(i+1, len(self)-1):
 				Ti = self.SortedTempList[i]
 				Tj = self.SortedTempList[j]
-				acc_ratio = float(self.accAttempts[i,j]) / float(self.allAttempts[i,j])
+				acc_ratio = float(self.accAttempts[i,j]) / float(self.allAttempts[i,j]) if self.allAttempts[i,j] else 0.0
 				of.write('%d K <--> %d K: %g\n' % (Ti, Tj, acc_ratio))
 
 		of.close()
 
-		if self.Verbose: print "Calculating random walk in temperature space..."
+		if self.Verbose: print "\nCalculating random walk in temperature space..."
 		of = open(self.WalkFile, 'w')
-		of.write('%\t'.join( [x for x in range(len(self))] ) + '\n')
+		of.write('\t'.join( [str(x) for x in range(len(self))] ) + '\n')
 		Walk = list(list(x) for x in np.loadtxt(self.SwapFile))
-		for row in walk:
+		for row in Walk:
 			s = ''
 			for i in range(len(self)):
 				if row.__contains__(i): s += '\t%d' % row.index(i)
@@ -171,10 +156,11 @@ class Ensemble(list):
 
 
 class REX(object):
-	def __init__(self, ReplicaClass, comm, Temps = None, EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapSteps = 1000):
-		self.comm = comm
+	def __init__(self, ReplicaClass, Temps = None, EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapSteps = 1000):
+		self.comm = MPI.COMM_WORLD
 		self.nproc = self.comm.size
 		self.rank = self.comm.rank
+		self.status = MPI.Status()
 
 		self.EquilSteps = EquilSteps
 		self.SwapSteps = int(SwapSteps)
@@ -184,7 +170,7 @@ class REX(object):
 		self.ReplicaClass = ReplicaClass
 		self.Temps = Temps
 
-		self.SIGINIT = 1
+		self.SIGACTIVE = 1
 		self.SIGKILL = 0
 
 
@@ -198,56 +184,118 @@ class REX(object):
 		isRunning = []
 		isQueued =range(len(self.server))
 
-		status = MPI.Status()
-
 		# send off the first batch of jobs in order 
 		for proc in range(1, self.nproc):
 			rID = proc - 1
 			sendbuf = (self.server[rID], rID, RunSteps)
-			self.comm.send(sendbuf, dest = proc, tag = self.SIGINIT)
+			self.comm.send(sendbuf, dest = proc, tag = self.SIGACTIVE)
 			isRunning.append(rID)
 			isQueued.remove(rID)
 
 		# set up a listener until all jobs are finished
 		while isRunning:
-			rID, proc = self.comm.recv(source = MPI.ANY_SOURCE, tag = MPI.ANY_TAG, status = status)
+			r, rID, proc = self.comm.recv(source = MPI.ANY_SOURCE, tag = MPI.ANY_TAG, status = self.status)
 			print 'Replica %d on proc %d finished' % (rID, proc)
+			self.server[rID] = r
 			isRunning.remove(rID)
 			if isQueued:
 					rID = isQueued[0]
 					sendbuf = (self.server[rID], rID, RunSteps)
-					self.comm.send(sendbuf, dest = proc, tag = self.SIGINIT)
+					self.comm.send(sendbuf, dest = proc, tag = self.SIGACTIVE)
 					isRunning.append(rID)
 					isQueued.remove(rID)
 
+
+	def Master(self):
+		self.server = Ensemble(SwapsPerCycle = 5, Verbose = True)
+		for i, Temp in enumerate(self.Temps): 
+			r = self.ReplicaClass(Temp = Temp, RInd = i)
+			self.server.append(r)
+		
+		# restart capabilities (backs up from 2nd last REX step) (#TODO: debug)
+		startiter = -1 
+		if os.path.isfile(self.server.SwapFile):
+			data = np.loadtxt(self.server.SwapFile)
+			startiter = len(data)
+			for i, Temp in enumerate(data[-2,:]):
+				self.server[i].Temp = Temp
+
+			for iter in range(startiter):
+				for i, r in enumerate(self.server):
+					self.CurrStateFile =  os.path.join( self.DataDir, '%d.%d.trj' % (i, iter) )
+					self.CurrEneFile = os.path.join( self.DataDir, '%d.%d.ene' % (i, iter) )
+					self.StateFiles.append(self.CurrStateFile) ; self.EneFiles.append(self.CurrEneFile)
+
+		# equilbration
+		if startiter == -1:
+			print 'Starting Equilibration....\n'
+			for r in self.server: r.isEquil = True
+			self.Qsub(self.EquilSteps)
+
+		# production with exchange
+		if startiter == -1: startiter = 0
+		print '\nStarting Production....\n'
+		for r in self.server: r.isEquil = False
+
+		for iter in range(startiter, self.SwapSteps):
+			for r in self.server:
+				r.NRexIter = iter
+				if iter == self.SwapSteps - 1: r.isTerm = True
+				r.InitStateFile  = r.NextInitStateFile
+
+			self.Qsub(self.ProdSteps)
+			
+			for r in self.server: r.getEne()
+
+			self.server.save_permutation()
+
+			self.server.swap(iter)
+
+		self.server.getStats()
 
 		for proc in range(1, self.nproc):
 			sendbuf = (None, None, None)
 			self.comm.send(sendbuf, dest = proc, tag = self.SIGKILL)
 
 
-	def Master(self):
-		self.server = Ensemble(SwapsPerCycle = 5)
-		for i, Temp in enumerate(self.Temps): 
-			r = self.ReplicaClass(Temp = Temp, RInd = i)
-			self.server.append(r)
-		
-		# equilbration
-		for r in self.server: r.isEquil = True
-		self.Qsub(self.EquilSteps)
-
-		# production with exchange
-
-
-
 	def Slave(self):
-		status = MPI.Status()
 		while True:
-			r, rID, RunSteps = self.comm.recv(source = 0, tag = MPI.ANY_TAG, status = status)
-			if status.Get_tag() == self.SIGINIT:
-				print 'Starting replica %d on proc %d...' % (rID, self.rank)
-				r.genFiles()
-				r.Run(RunSteps, self.StepFreq)
-				self.comm.send((rID, self.rank), dest = 0, tag = 1)
+			r, rID, RunSteps = self.comm.recv(source = 0, tag = MPI.ANY_TAG, status = self.status)
+			if self.status.Get_tag() == self.SIGKILL: break
+			r.genFiles()
+			r.Run(RunSteps, self.StepFreq)
+			self.comm.send((r, rID, self.rank), dest = 0, tag = self.SIGACTIVE)
 
-			elif status.Get_tag() == self.SIGKILL: break
+
+
+
+# This is a demuxer to order the traj by temperature
+def demux(ReplicaClass, Temps, thisTemp, SwapSteps, SwapFile = 'swap.txt'):
+		# this is written in parallel since the state and ene files for each replica are large
+
+		comm = MPI.COMM_WORLD
+		rank = comm.rank
+
+		Ind = sorted(Temps).index(thisTemp)
+		r = ReplicaClass(RInd = Ind, Temp = thisTemp)
+
+		MasterDir = os.path.join(os.getcwd(), str(thisTemp) + 'K')
+		MasterStateFile = os.path.join(MasterDir, str(thisTemp) + '.trj')
+		MasterEneFile = os.path.join(MasterDir, str(thisTemp) + '.ene')
+
+		if rank == 0:
+			if not os.path.isdir(MasterDir): os.mkdir(MasterDir)
+
+		Walk = list(np.loadtxt(SwapFile)[:, Ind])
+		for NRexIter, i in enumerate(Walk):
+			i = int(i) # numpy loads floats
+			
+			thisStateFile =  os.path.join('%d' % i, '%d.%d.trj' % (i, NRexIter))  
+			s_state = r.getState(thisStateFile)
+			with open(MasterStateFile, 'a') as of:
+				of.write(s_state)
+
+			thisEneFile =  os.path.join('%d' % i, '%d.%d.ene' % (i, NRexIter))
+			s_ene = file(thisEneFile, 'r').read()
+			with open(MasterEneFile, 'a') as of:
+				of.write(s_ene)
