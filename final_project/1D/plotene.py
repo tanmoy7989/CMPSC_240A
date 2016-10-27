@@ -8,6 +8,8 @@ statefile = sys.argv[1]
 enefile = sys.argv[2]
 enesurf_filename = sys.argv[3]
 makeMovie = bool(int(sys.argv[4]))
+movie_filename = sys.argv[5]
+
 pos = np.loadtxt(statefile)
 ene = np.loadtxt(enefile)
 
@@ -30,7 +32,7 @@ plt.savefig(enesurf_filename)
 # movie
 if makeMovie:
 	fig = plt.figure(figsize = (10,5), facecolor = 'w', edgecolor = 'w')
-	framestep = 50
+	framestep = 10
 	for i in range(len(pos)):
 		if i % framestep: continue
 	
@@ -54,7 +56,7 @@ if makeMovie:
 		plt.tight_layout()
 		plt.savefig( 'frame_%d.png' % (int(i/framestep) + 1) )
 
-	cmdstring = 'avconv -i "frame_%d.png" -r 25 -c:v libx264 -crf 10 -pix_fmt yuv420p movie.mov'
+	cmdstring = 'avconv -i "frame_%d.png" -r 25 -c:v libx264 -crf 10 -pix_fmt yuv420p ' + movie_filename
 	os.system(cmdstring)
 
 	for i in range(len(pos)):
