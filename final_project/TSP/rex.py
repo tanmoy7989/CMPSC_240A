@@ -15,6 +15,13 @@ def tour2str(tour):
 	return ' '.join(str(x) for x in tour) + '\n'
 
 class TSP(rexlib.Replica):
+	
+	def getState(self, filename):
+		'''complete state space for one sampling run'''
+		with open(filename, 'r') as of:
+			return of.read()
+	
+
 	def Run(self, Files, RunSteps, StepFreq):
 		self.kB = 1.0
 		
@@ -60,7 +67,7 @@ class TSP(rexlib.Replica):
 ### MAIN
 str_tour0 = tour2str(range(ncities) + [0]) ; file('init.dat', 'w').write(str_tour0)
 Temps = [10, 20, 30, 40]
-rex = rexlib.REX(ReplicaClass = TSP, Temps = Temps, EquilSteps = 1e3, ProdSteps = 2e3, StepFreq = 10, SwapSteps = 20, SwapsPerCycle = 3, Verbose = False)
+rex = rexlib.REX(ReplicaClass = TSP, Temps = Temps, EquilSteps = 1e3, ProdSteps = 2e3, StepFreq = 10, SwapSteps = 20, SwapsPerCycle = 3, Verbose = True)
 rex.Run()
 rex.demux(10)
 
