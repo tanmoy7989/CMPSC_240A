@@ -9,17 +9,22 @@ class Replica(object):
 		self.kB = 0.001987 # Boltzmann constant
 
 	def getEne(self, filename):
+		'''instantaneous energy from last sample of state space'''
 		return np.loadtxt(filename)[-1]
 
 	def getAllEne(self, filename):
+		'''all energies for one sampling run'''
 		with open(filename, 'r') as of:
 			return of.read()
 
 	def getState(self, filename):
+		'''complete state space for one sampling run'''
 		with open(filename, 'r') as of:
 			return of.read()
 	
 	def Run(self, Files, RunSteps, StepFreq):
+		'''the workhorse that runs the sampling algorithm
+		   can and will vary according to problem at hand'''
 		pass
 
 
@@ -64,6 +69,7 @@ class REX(object):
 
 	
 	def createFileSys(self):
+		'''create all necessary files and directories'''
 		for thisfile in [self.SwapFile, self.LogFile, self.StatFile, self.WalkFile]:
 			with open(thisfile, 'w') as of: pass
 
@@ -83,6 +89,7 @@ class REX(object):
 					with open(filename, 'w') as of: pass
 
 	def get_rFiles(self, rID):
+		'''get all necessary files needed for a replica to run its sampling code'''
 		if self.niter == -1:
 			initdatafile = self.INITFILE
 			statefile = 'equil.%d.trj' % rID
@@ -102,7 +109,8 @@ class REX(object):
 		return files
 
 	def demux(self, thisTemp):
-		# this is written in parallel since the state and ene files for each replica may be large
+		'''demultiplexer to concatenate all state files at a given temperature
+			this is written in parallel since the state and ene files for each replica may be large'''
 		Dir = os.path.join(self.DATADIR, str(thisTemp))
 		statefile = os.path.join(Dir, str(thisTemp) + '.trj')
 		enefile = os.path.join(Dir, str(thisTemp) + '.ene')
@@ -130,12 +138,14 @@ class REX(object):
 			self.niter += 1
 
 	def Log(self, msg):
+		'''screen and file logging'''
 		if not self.LogFile is None: file(self.LogFile, 'a').write(msg)
 		if self.Verbose: print msg
 
 
 
 	def Submit(self, rID, destID):
+		'''send jobs to client processes'''
 		r = self.Ensemble[rID]
 		rFiles = self.get_rFiles(rID)
 		RunSteps = self.EquilSteps if self.niter == -1 else self.ProdSteps
@@ -144,6 +154,7 @@ class REX(object):
 		self.Log('\nStarting Replica %d on proc %d...\n' % (rID, destID))
 
 	def Qsub(self):
+		'''manage a queue of jobs'''
 		# set up flag arrays
 		isRunning = []
 		isQueued =range(len(self.Ensemble))
@@ -170,17 +181,22 @@ class REX(object):
 
 
 	def MetHast(self, r1, r2, Ene1, Ene2):
+		'''implement the Metropolis-Hastings criteria'''
 		kB = r1.kB
 		Delta = ( 1./(kB * r2.Temp) - 1./(kB * r1.Temp) ) * (Ene1 - Ene2)
 		pacc = min(1, np.exp(- Delta))
 		return pacc > random.random()
 
 	def getNeigh(self, i):
+		''' get a random adjancent neighbor'''
 		if i == 0: return 1
 		elif i == len(self.Temps) - 1: return len(self.Temps) - 2
 		else: return np.random.choice([i-1, i+1])
 
 	def Swap(self):
+		'''perform exchange between the replicas
+		   try self.SwapsPerCycle times'''
+
 		self.Log('\n\n========== REX ITER %d ============\n\n' % self.niter)
 		acc = []
 		for  n in range(self.SwapsPerCycle):
@@ -202,13 +218,16 @@ class REX(object):
 					self.accAttempts[min(Ti, Tj)] += 1
 
 	def save_permutation(self):
+		'''save a permutation of the replicas in temperature space'''
 		TempList = np.array([r.Temp for r in self.Ensemble])
 		permutation = np.argsort(TempList)
 		s = '\t'.join([str(x) for x in permutation]) + '\n'
 		with open(self.SwapFile, 'a') as of: of.write(s)
 
 	def getStats(self):
-		# this is written in serial since the data used is relatively small
+		'''generate statistics about the Metropolis Hastings acceptance
+		   and how a replica performs a random walk in temperature space.
+		   this is written in serial since the data used is relatively small'''
 		self.Log('\nCalculating acceptance ratios...')
 		with open(self.StatFile, 'w') as of:
 			for i in range(len(self.Ensemble)-1):
@@ -230,10 +249,12 @@ class REX(object):
 
 
 	def Run(self):
+		'''wrapper'''
 		if self.rank == 0: self.Server()
 		else: self.Client()
 
 	def Server(self):
+		'''server that conducts all the replica exchanges'''
 		self.createFileSys()
 		
 		for i in range(len(self.Temps)):
@@ -261,6 +282,7 @@ class REX(object):
 			self.comm.send(sendbuf, dest = proc, tag = self.SIGKILL)
 
 	def Client(self):
+		'''client that runs the Run method of the replica'''
 		while True:
 			r, rID, rFiles, RunSteps = self.comm.recv(source = 0, tag = MPI.ANY_TAG, status = self.status)
 			if self.status.Get_tag() == self.SIGKILL: break
@@ -272,6 +294,7 @@ class REX(object):
 
 # exponential schedule of temps.
 def getTemps(Min, Max, NTemps):
+	'''returns set of temps distributed exponentially'''
 	Min = float(Min) ; Max = float(Max)
 	rate = (Max/Min) ** (1./NTemps)
 	return [Min * (rate)**i for i in range(NTemps)]

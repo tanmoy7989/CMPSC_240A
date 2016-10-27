@@ -45,7 +45,7 @@ class myReplica(rexlib.Replica):
 
 ### MAIN
 x0 = 30.0 ; file('init.dat', 'w').write('%g\n' % x0)
-Temps = rexlib.getTemps(Min = 300, Max = 600, NTemps = 20)
+Temps = [300, 400, 500, 600]
 rex = rexlib.REX(ReplicaClass = myReplica, Temps = Temps, EquilSteps = 1e4, ProdSteps = 2e4, StepFreq = 10, SwapSteps = 100, SwapsPerCycle = 3, Verbose = False)
 rex.Run()
 rex.demux(300)
