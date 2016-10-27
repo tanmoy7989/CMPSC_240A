@@ -9,19 +9,18 @@ dist = np.loadtxt('p01_d.txt', skiprows = 1)
 ncities = len(coords)
 
 def plotTour(ax, tour):
-	for ii in range(ncities + 1):
+	ax.hold(True)
+	for ii in range(ncities):
 		i = tour[ii]
 		p1 = [coords[i,0], coords[i,1]]
-		
-		color = 'red' if ii == 0 or ii == ncities else 'cyan'
-		ax.scatter( [ p1[0] ], [ p1[1] ], s = 60, marker = 'o', color = color)
 
-		if ii < ncities:
+		if ii < ncities - 1:
 			j = tour[ii+1]
 			p2 = [coords[j,0], coords[j,1]]
 			ax.quiver(p1[0], p1[1], p2[0]-p1[0], p2[1]-p1[1], scale_units = 'xy', angles = 'xy', scale = 1)
 
-		ax.hold(True)
+		color = 'red' if ii == 0 or ii == ncities - 1 else 'cyan'
+		ax.scatter( [ p1[0] ], [ p1[1] ], s = 60, marker = 'o', color = color)
 
 
 statefile = sys.argv[1]
@@ -30,8 +29,8 @@ enesurf_filename = sys.argv[3]
 makeMovie = bool(int(sys.argv[4]))
 movie_filename = sys.argv[5]
 
-state = np.loadtxt(statefile)
-ene = np.loadtxt(enefile)
+state = np.loadtxt(statefile)[:10]
+ene = np.loadtxt(enefile)[:10]
 
 # sampling in distance space
 fig = plt.figure(figsize = (5,5), facecolor = 'w', edgecolor = 'w')
@@ -44,7 +43,7 @@ plt.savefig(enesurf_filename)
 # movie
 if makeMovie:
 	fig = plt.figure(figsize = (10,5), facecolor = 'w', edgecolor = 'w')
-	framestep = 10
+	framestep = 1
 	for i in range(len(state)):
 		if i % framestep: continue
 	
@@ -71,5 +70,5 @@ if makeMovie:
 
 	for i in range(len(state)):
 		if i % framestep: continue
-		os.remove( 'frame_%d.png' % (int(i/framestep) + 1) )
+		#os.remove( 'frame_%d.png' % (int(i/framestep) + 1) )
 

@@ -8,20 +8,15 @@ coords = np.loadtxt('p01_xy.txt', skiprows = 1)
 dist = np.loadtxt('p01_d.txt', skiprows = 1)
 ncities = len(coords)
 
+isGreedy = False
+
 def Efunc(tour):
-	return sum( [ dist[tour[i], tour[i+1] ] for i in range(ncities) ] )
+	return sum( [ dist[tour[i], tour[i+1] ] for i in range(ncities-1) ] )
 
 def tour2str(tour):
 	return ' '.join(str(x) for x in tour) + '\n'
 
 class TSP(rexlib.Replica):
-	
-	def getState(self, filename):
-		'''complete state space for one sampling run'''
-		with open(filename, 'r') as of:
-			return of.read()
-	
-
 	def Run(self, Files, RunSteps, StepFreq):
 		self.kB = 1.0
 		
@@ -30,7 +25,7 @@ class TSP(rexlib.Replica):
 
 		tour = [int(x) for x in np.loadtxt(InitDataFile)]
 		Ene = Efunc(tour)
-		MAXSWAP = 5
+		MAXSWAP = 3
 
 		# write initial co-ordinate
 		file(StateFile, 'a').write(tour2str(tour))
@@ -42,16 +37,27 @@ class TSP(rexlib.Replica):
 			isSwapped = []
 			for swap in range(MAXSWAP):
 				ii = np.random.choice(range(ncities-1))
-				jj = np.random.choice([ii-1, ii + 1])
-				if jj > ncities: jj = 0
-				elif jj < 0: jj = ncities-1
+				if ii == 0: jj = 1
+				elif ii == ncities - 1: jj = ncities - 2 # don't reverse a tour (equivalent tour)
+				else: jj = np.random.choice([ii-1, ii + 1])
+				
 				if isSwapped and ( isSwapped.__contains__((ii, jj)) or isSwapped.__contains__((jj, ii)) ): continue
 				tour_new[ii], tour_new[jj] = tour_new[jj], tour_new[ii]
 			
-			Ene_new = Efunc(tour_new)
+			n1 = min(ii,jj) ; n2 = max(ii, jj)
+			n0 = n1 -1 if n1 > 0 else -1
+			n3 = n2 + 1 if n2 < ncities - 1 else ncities
+			d1 = dist[tour[n0], tour[n1]] if n0 > 0 else 0
+			d2 = dist[tour[n2], tour[n3]] if n3 < ncities - 1 else 0
+			d3 = dist[tour[n0], tour[n2]] if n0 > 0 else 0
+			d4 = dist[tour[n1], tour[n3]] if n3 < ncities - 1 else 0
+			Ene_new = Ene - d1 - d2 + d3 + d4
+			
 			Delta = (Ene_new - Ene) / (self.kB * self.Temp)
 			pacc = min(1.0, np.exp(-Delta))
-			if pacc > random.random():
+			
+			criterion = (pacc > random.random()) if not isGreedy else (Ene_new < Ene)
+			if criterion:
 				tour = tour_new
 				Ene = Ene_new
 			
@@ -64,10 +70,11 @@ class TSP(rexlib.Replica):
 		for thisfile in Files: file(thisfile, 'r').close()
 
 
+
 ### MAIN
-str_tour0 = tour2str(range(ncities) + [0]) ; file('init.dat', 'w').write(str_tour0)
-Temps = [10, 20, 30, 40]
-rex = rexlib.REX(ReplicaClass = TSP, Temps = Temps, EquilSteps = 1e3, ProdSteps = 2e3, StepFreq = 10, SwapSteps = 20, SwapsPerCycle = 3, Verbose = True)
+str_tour0 = tour2str(range(ncities)) ; file('init.dat', 'w').write(str_tour0)
+Temps = rexlib.getTemps(0.1, 10, 12)
+rex = rexlib.REX(ReplicaClass = TSP, Temps = Temps, EquilSteps = 1e4, ProdSteps = 2e4, StepFreq = 1, SwapSteps = 1000, SwapsPerCycle = 5, DATADIR = os.path.abspath('./monte_carlo'), Verbose = True)
 rex.Run()
-rex.demux(10)
+rex.demux(0.1)
 

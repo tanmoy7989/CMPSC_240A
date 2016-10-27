@@ -9,7 +9,7 @@ dist = np.loadtxt('p01_d.txt', skiprows = 1)
 ncities = len(coords)
 
 def Efunc(tour):
-	return sum( [ dist[tour[i], tour[i+1] ] for i in range(ncities) ] )
+	return sum( [ dist[tour[i], tour[i+1] ] for i in range(ncities-1) ] )
 
 def tour2str(tour):
 	return ' '.join(str(x) for x in tour) + '\n'
@@ -35,13 +35,22 @@ class TSP(rexlib.Replica):
 			isSwapped = []
 			for swap in range(MAXSWAP):
 				ii = np.random.choice(range(ncities-1))
-				jj = np.random.choice([ii-1, ii + 1])
-				if jj > ncities: jj = 0
-				elif jj < 0: jj = ncities-1
+				if ii == 0: jj = 1
+				elif ii == ncities - 1: jj = ncities - 2 # don't reverse a tour (equivalent tour)
+				else: jj = np.random.choice([ii-1, ii + 1])
+				
 				if isSwapped and ( isSwapped.__contains__((ii, jj)) or isSwapped.__contains__((jj, ii)) ): continue
 				tour_new[ii], tour_new[jj] = tour_new[jj], tour_new[ii]
 			
-			Ene_new = Efunc(tour_new)
+			n1 = min(ii,jj) ; n2 = max(ii, jj)
+			n0 = n1 -1 if n1 > 0 else -1
+			n3 = n2 + 1 if n2 < ncities - 1 else ncities
+			d1 = dist[tour[n0], tour[n1]] if n0 > 0 else 0
+			d2 = dist[tour[n2], tour[n3]] if n3 < ncities - 1 else 0
+			d3 = dist[tour[n0], tour[n2]] if n0 > 0 else 0
+			d4 = dist[tour[n1], tour[n3]] if n3 < ncities - 1 else 0
+			Ene_new = Ene - d1 - d2 + d3 + d4
+			
 			Delta = (Ene_new - Ene) / (self.kB * self.Temp)
 			pacc = min(1.0, np.exp(-Delta))
 			if pacc > random.random():
@@ -59,7 +68,7 @@ class TSP(rexlib.Replica):
 
 ### MAIN
 TempSet = 10.0
-str_tour0 = tour2str(range(ncities) + [0]) ; file('init.dat', 'w').write(str_tour0)
+str_tour0 = tour2str(range(ncities)) ; file('init.dat', 'w').write(str_tour0)
 
 EquilSteps = 1e3
 ProdSteps = 2e3
@@ -73,4 +82,5 @@ r.Run(Files, EquilSteps, StepFreq)
 
 # prod runs
 Files = ['prod.dat', 'prod.trj', 'prod.ene', 'prod1.dat']
+r.Run(Files, ProdSteps, StepFreq)
 
