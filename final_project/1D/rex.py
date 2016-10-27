@@ -2,20 +2,20 @@
 import os, sys, random, copy
 import numpy as np
 
-sys.path.append(os.path.abspath('../')) ; from rexlib import *
+sys.path.append(os.path.abspath('../')) ; import rexlib
 
 # test function -- > E(x) = 3 * sin(x) + (0.1*x - 3)**2, 0 <=x <= 60.
 # source : http://www.lindonslog.com/programming/stochastic-optimization-r-rmpi-parallel-tempering/
 Efunc = lambda x:  0.6 * (3 * np.sin(x) + (0.1*x - 3)**2)
 
-class myReplica(Replica):
+class myReplica(rexlib.Replica):
 	def Run(self, RunSteps, StepFreq):
+		kB = 0.001987
 		RunSteps = int(RunSteps)
 		x = float(file(self.InitStateFile).read())
 		Ene = Efunc(x)
 		MAXDELTA = 5.0
 		Box = [0, 60]; BoxL = Box[1] - Box[0] ; iBoxL = 1./float(BoxL)
-		kB = 0.001987
 		
 		# write initial co-ordinate
 		file(self.CurrStateFile, 'a').write('%g\n' % x)
@@ -46,11 +46,10 @@ class myReplica(Replica):
 
 ### MAIN
 x0 = 30.0 ; file('init.dat', 'w').write('%g\n' % x0)
-Temps = [270, 300, 350, 400, 450, 500, 600, 750]
+Temps = rexlib.getTemps(300, 1500, 8)
 
-rex = REX(ReplicaClass = myReplica, Temps = Temps, 
-		  EquilSteps = 1e4, ProdSteps = 2e4, StepFreq = 10, SwapSteps = 100)
-#rex.Run()
+rex = rexlib.REX(ReplicaClass = myReplica, Temps = Temps, EquilSteps = 1e4, ProdSteps = 2e4, StepFreq = 10, SwapSteps = 100, SwapsPerCycle = 5)
+rex.Run()
 
-demux(ReplicaClass = myReplica, Temps = Temps, thisTemp = 300, SwapSteps = 100, SwapFile = 'swap.txt')
+rexlib.demux(ReplicaClass = myReplica, Temps = Temps, thisTemp = 300, SwapSteps = 100, SwapFile = 'swap.txt')
 
