@@ -41,8 +41,9 @@ if makeMovie:
 		eneslice = ene[:i]
 
 		ax1 = fig.add_subplot(1,2,1)
-		ax1.plot(timeslice, posslice, linestyle = 'none', color = 'red', marker = 'o', markersize = 5)
-		if i == 0: ax1.set_xlabel(r'$t$', fontsize = 20) ; ax1.set_ylabel(r'$x$', fontsize = 20)
+		ax1.plot(np.linspace(0,60,10), np.zeros(10), linestyle = 'solid', color = 'black')
+		ax1.plot(posslice, np.zeros(len(posslice)), linestyle = 'none', color = 'red', marker = 'o', markersize = 5)
+		if i == 0: ax1.set_xlabel(r'$x$', fontsize = 20)
 		ax1.hold(True)
 
 		ax2 = fig.add_subplot(1,2,2)
