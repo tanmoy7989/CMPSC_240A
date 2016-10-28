@@ -1,0 +1,59 @@
+#Lammps inpt script for C60 polymer simulation
+
+# INITIALISATION
+units real
+atom_style full
+read_restart %(InitDataFile)s
+
+# FORCEFIELD
+pair_style lj/cut 10.00
+pair_coeff 1 1 0.13986 3.73 10.00
+pair_modify shift yes		
+bond_style harmonic
+bond_coeff 1 400 1.53
+angle_style harmonic
+angle_coeff 1 55.17204 111.0
+
+# RESCALE VELOCITIES WITH TEMP
+velocity all scale %(Temp)g
+
+# NEIGHBOR LIST SETTINGS
+neighbor 2.0 bin
+neigh_modify every 5 delay 10 check yes
+
+# TIMESTEP
+timestep 2.0
+
+# THERMOSTAT
+fix nvt all nvt temp %(Temp)g %(Temp)g 100
+thermo_style  custom step temp atoms pe
+thermo %(StepFreq)d
+thermo_modify flush yes
+
+# RECENTER POLYMER (SINCE DONE IN VACUUM)
+fix nodrift all momentum 10 linear 1 1 1 angular
+fix com all recenter 0.0 0.0 0.0 units box
+
+# STATEFILE
+dump trj all custom %(StepFreq)d %(TrjFile)s id type x y z
+
+# ENERGY AND COMPUTE FILE
+compute my_pe all pe
+compute rg all gyration
+fix ene all ave/time 1 10 %(StepFreq)d c_my_pe c_rg file %(EneFile)s
+
+# RUN
+run_style verlet
+run %(RunSteps)d
+
+# WRITE RESTART FILE 
+write_restart %(OutputDataFile)s
+
+# CLEANUP
+undump trj
+uncompute rg
+uncompute my_pe
+unfix ene
+unfix nvt
+unfix com
+unfix nodrift

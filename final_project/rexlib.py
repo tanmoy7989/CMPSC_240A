@@ -30,7 +30,8 @@ class Replica(object):
 
 
 class REX(object):
-	def __init__(self, ReplicaClass, Temps = None, INITIFILE = 'init.dat', EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapSteps = 1000, SwapsPerCycle = 5, Verbose = False):
+	def __init__(self, ReplicaClass, Temps = None, EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapSteps = 1000, SwapsPerCycle = 5, 
+				 DATADIR = os.getcwd(), INITIFILE = 'init.dat', Verbose = False):
 		# Initialize MPI
 		self.comm = MPI.COMM_WORLD
 		self.nproc = self.comm.size
@@ -58,8 +59,8 @@ class REX(object):
 		# Initialize logging
 		self.Verbose = Verbose
 	
-		# Create file system
-		self.DATADIR = os.getcwd()
+		# File system
+		self.DATADIR = DATADIR
 		self.INITFILE = INITIFILE
 		self.SwapFile = os.path.join(self.DATADIR, 'swap.txt')
 		self.LogFile = os.path.join(self.DATADIR, 'log.txt')
@@ -70,6 +71,8 @@ class REX(object):
 	
 	def createFileSys(self):
 		'''create all necessary files and directories'''
+		if not os.path.isdir(self.DATADIR): os.mkdir(self.DATADIR)
+
 		for thisfile in [self.SwapFile, self.LogFile, self.StatFile, self.WalkFile]:
 			with open(thisfile, 'w') as of: pass
 
@@ -103,39 +106,38 @@ class REX(object):
 
 		files = []
 		for thisfile in [initdatafile, statefile, enefile, outputdatafile]:
-			Dir = "" if thisfile == self.INITFILE and self.niter == -1 else str(rID)
-			files.append(os.path.join(self.DATADIR, Dir, thisfile))
+			Dir = "" if thisfile == self.INITFILE and self.niter == -1 else os.path.join(self.DATADIR, str(rID))
+			files.append(os.path.join(Dir, thisfile))
 
 		return files
 
 	def demux(self, thisTemp):
-		'''demultiplexer to concatenate all state files at a given temperature
-			this is written in parallel since the state and ene files for each replica may be large'''
+		'''demultiplexer to concatenate all state files at a given temperature.
+		   This is written in parallel since the state and ene files for each replica may be large'''
 		Dir = os.path.join(self.DATADIR, str(thisTemp))
 		statefile = os.path.join(Dir, str(thisTemp) + '.trj')
 		enefile = os.path.join(Dir, str(thisTemp) + '.ene')
 
-		if self.rank == 0:
+		if self.rank == 0: 
+			self.Log('\nDemuxing %g trajectory...' % thisTemp)
 			if not os.path.isdir(Dir): os.mkdir(Dir)
 			for thisfile in [statefile, enefile]:
 				with open(thisfile, 'w') as of: pass 
-
-		if self.rank: return # serial version for now
-
-		self.Log('\nDemuxing %g trajectory...' % thisTemp)
-
+		
 		Ind = self.Temps.index(thisTemp)
 		Walk = list(np.loadtxt(self.SwapFile)[:,Ind])
 		dummy_r = self.ReplicaClass(Temp = None)
 		self.niter = 0
 		for rID in Walk:
 			rID = int(rID) # since numpy.loadtxt returns a float
-			rFiles = self.get_rFiles(rID)
-			s_state = dummy_r.getState(rFiles[1])
-			s_ene = dummy_r.getAllEne(rFiles[2])
-			with open(statefile, 'a') as of: of.write(s_state)
-			with open(enefile, 'a') as of: of.write(s_ene)
-			self.niter += 1
+			procID = rID - self.nproc * int(rID / self.nproc)
+			if self.rank == procID:
+				rFiles = self.get_rFiles(rID)
+				s_state = dummy_r.getState(rFiles[1])
+				s_ene = dummy_r.getAllEne(rFiles[2])
+				with open(statefile, 'a') as of: of.write(s_state)
+				with open(enefile, 'a') as of: of.write(s_ene)
+				self.niter += 1
 
 	def Log(self, msg):
 		'''screen and file logging'''
@@ -234,7 +236,7 @@ class REX(object):
 					Ti = self.Temps[i]
 					Tj = self.Temps[i+1]
 					acc_ratio = float(self.accAttempts[i]) / float(self.allAttempts[i]) if self.allAttempts[i] else 0.0
-					of.write('%d <--> %d : %g\n' % (Ti, Tj, acc_ratio))
+					of.write('%g <--> %g : %g\n' % (Ti, Tj, acc_ratio))
 
 		self.Log('\nCalculating random walk in temperature space...')
 		with open(self.WalkFile, 'w') as of:
