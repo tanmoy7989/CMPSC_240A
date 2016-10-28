@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
-import random, os
+import random, os, time
 from mpi4py import MPI
 
 class Replica(object):
@@ -31,7 +31,7 @@ class Replica(object):
 
 class REX(object):
 	def __init__(self, ReplicaClass, Temps = None, EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapSteps = 1000, SwapsPerCycle = 5, 
-				 DATADIR = os.getcwd(), INITIFILE = 'init.dat', Verbose = False):
+				 DATADIR = os.getcwd(), INITIFILE = 'init.dat', Verbose = False, Profile = False):
 		# Initialize MPI
 		self.comm = MPI.COMM_WORLD
 		self.nproc = self.comm.size
@@ -58,6 +58,10 @@ class REX(object):
 
 		# Initialize logging
 		self.Verbose = Verbose
+
+		# Profiling
+		self.Profile = Profile
+		self.ServerTime = 0.0 ; self.RunTime = 0.0 ; self.FetchTime = 0.0
 	
 		# File system
 		self.DATADIR = DATADIR
@@ -66,6 +70,7 @@ class REX(object):
 		self.LogFile = os.path.join(self.DATADIR, 'log.txt')
 		self.StatFile = os.path.join(self.DATADIR, 'statistics.txt')
 		self.WalkFile = os.path.join(self.DATADIR, 'random_walk.txt')
+		if self.Profile: self.ProfileFile = os.path.join(self.DATADIR, 'profile.txt')
 		
 
 	
@@ -73,7 +78,9 @@ class REX(object):
 		'''create all necessary files and directories'''
 		if not os.path.isdir(self.DATADIR): os.mkdir(self.DATADIR)
 
-		for thisfile in [self.SwapFile, self.LogFile, self.StatFile, self.WalkFile]:
+		files = [self.SwapFile, self.LogFile, self.StatFile, self.WalkFile]
+		if self.Profile: files.append(self.ProfileFile)
+		for thisfile in files:
 			with open(thisfile, 'w') as of: pass
 
 		for rID in range(len(self.Temps)):
@@ -144,6 +151,11 @@ class REX(object):
 		if not self.LogFile is None: file(self.LogFile, 'a').write(msg)
 		if self.Verbose: print msg
 
+	def writeProfile(self):
+		for x in [self.ServerTime, self.RunTime, self.FetchTime]:
+			x /= self.SwapSteps
+		file(self.ProfileFile, 'w').write('Mean Server Time = %g\nMean Run Time = %g\nMean Fetch Time = %g\n' % (self.ServerTime, self.RunTime, self.FetchTime))
+
 
 
 	def Submit(self, rID, destID):
@@ -170,15 +182,24 @@ class REX(object):
 
 		# set up a listener until all jobs are finished
 		while isRunning:
-			rID, rEne, proc = self.comm.recv(source = MPI.ANY_SOURCE, tag = MPI.ANY_TAG, status = self.status)
+			rID, rEne, proc, clienttime = self.comm.recv(source = MPI.ANY_SOURCE, tag = MPI.ANY_TAG, status = self.status)
 			self.Log('\nReplica %d on proc %d finished\n' % (rID, proc))
 			self.Ene[rID] = rEne
 			isRunning.remove(rID)
+			
+			if self.Profile:
+				self.RunTime += clienttime[0]
+				self.FetchTime += clienttime[1]
+
 			if isQueued:
 					rID = isQueued[0]
 					self.Submit(rID, proc)
 					isRunning.append(rID)
 					isQueued.remove(rID)
+
+			if self.Profile:
+				self.FetchTime /= float(self.nproc - 1)
+				self.RunTime /= float(self.nproc - 1)
 
 
 
@@ -201,6 +222,8 @@ class REX(object):
 
 		self.Log('\n\n========== REX ITER %d ============\n\n' % self.niter)
 		acc = []
+
+		t1 = time.time() if self.Profile else None
 		for  n in range(self.SwapsPerCycle):
 				self.Log("Cycle: %d\n" % n)
 
@@ -218,6 +241,9 @@ class REX(object):
 				if accept:
 					r1.Temp, r2.Temp = r2.Temp, r1.Temp
 					self.accAttempts[min(Ti, Tj)] += 1
+
+		t2 = time.time() if self.Profile else None
+		if self.Profile: self.ServerTime += (t2 - t1)
 
 	def save_permutation(self):
 		'''save a permutation of the replicas in temperature space'''
@@ -278,6 +304,8 @@ class REX(object):
 
 		self.getStats()
 
+		if self.Profile: self.writeProfile()
+
 		# disconnect all clients
 		for proc in range(1, self.nproc):
 			sendbuf = (None, None, None, None)
@@ -288,9 +316,17 @@ class REX(object):
 		while True:
 			r, rID, rFiles, RunSteps = self.comm.recv(source = 0, tag = MPI.ANY_TAG, status = self.status)
 			if self.status.Get_tag() == self.SIGKILL: break
+			t1 = time.time() if self.Profile else None
 			r.Run(rFiles, RunSteps, self.StepFreq)
+			t2 = time.time() if self.Profile else None
 			rEne = r.getEne(rFiles[2])
-			self.comm.send((rID, rEne, self.rank), dest = 0, tag = self.SIGACTIVE)
+			t3 = time.time() if self.Profile else None
+			if self.Profile:
+				runtime = t2 - t1
+				fetchtime = t3 - t2
+				clienttime = [runtime, fetchtime]
+			else: clienttime = None
+			self.comm.send((rID, rEne, self.rank, clienttime), dest = 0, tag = self.SIGACTIVE)
 
 
 
