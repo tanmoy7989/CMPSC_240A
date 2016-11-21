@@ -1,4 +1,5 @@
-#Lammps inpt script for C25 polymer simulation
+# Lammps inpt script for C25 polymer simulation
+# Written from rexlib
 
 # INITIALISATION
 units real
