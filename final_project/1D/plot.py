@@ -6,9 +6,8 @@ import os, sys
 
 statefile = sys.argv[1]
 enefile = sys.argv[2]
-enesurf_filename = sys.argv[3]
+Prefix = sys.argv[3]
 makeMovie = bool(int(sys.argv[4]))
-movie_filename = sys.argv[5]
 
 pos = np.loadtxt(statefile)
 ene = np.loadtxt(enefile)
@@ -27,15 +26,18 @@ ax.plot(pos, ene, linestyle = 'none', color = 'red', marker = 'o', markersize = 
 ax.set_xlabel(r'$x$', fontsize = 20); ax.set_ylabel(r'$E(x)$', fontsize = 20)
 ax.legend(loc = 'best', prop = {'size': 15})
 plt.tight_layout()
-plt.savefig(enesurf_filename)
+plt.savefig(Prefix + '.png')
 
 # movie
 if makeMovie:
 	fig = plt.figure(figsize = (10,5), facecolor = 'w', edgecolor = 'w')
-	framestep = 10
+	nframes = 200
+	framestep = int(len(pos) / nframes)
 	for i in range(len(pos)):
 		if i % framestep: continue
-	
+		
+		print "Rendering snapshot", i
+
 		timeslice = range(i)
 		posslice = pos[:i]
 		eneslice = ene[:i]
@@ -57,7 +59,7 @@ if makeMovie:
 		plt.tight_layout()
 		plt.savefig( 'frame_%d.png' % (int(i/framestep) + 1) )
 
-	cmdstring = 'avconv -i "frame_%d.png" -r 25 -c:v libx264 -crf 10 -pix_fmt yuv420p ' + movie_filename
+	cmdstring = 'avconv -i "frame_%d.png" -r 10 -c:v libx264 -crf 10 -pix_fmt yuv420p ' + Prefix + '.avi'
 	os.system(cmdstring)
 
 	for i in range(len(pos)):
