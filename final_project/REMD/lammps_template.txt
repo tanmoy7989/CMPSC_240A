@@ -1,4 +1,5 @@
-#Lammps inpt script for C60 polymer simulation
+# Lammps input script for C60 polymer simulation
+# Written from rexlib
 
 # INITIALISATION
 units real
@@ -26,9 +27,6 @@ timestep 2.0
 
 # THERMOSTAT
 fix nvt all nvt temp %(Temp)g %(Temp)g 100
-thermo_style  custom step temp atoms pe
-thermo %(StepFreq)d
-thermo_modify flush yes
 
 # RECENTER POLYMER (SINCE DONE IN VACUUM)
 fix nodrift all momentum 10 linear 1 1 1 angular
@@ -38,11 +36,13 @@ fix com all recenter 0.0 0.0 0.0 units box
 dump trj all custom %(StepFreq)d %(TrjFile)s id type x y z
 
 # ENERGY AND COMPUTE FILE
-compute my_pe all pe
 compute rg all gyration
-fix ene all ave/time 1 10 %(StepFreq)d c_my_pe c_rg file %(EneFile)s
+thermo_style custom step temp atoms pe c_rg
+thermo %(StepFreq)d
+thermo_modify flush yes
 
 # RUN
+reset_timestep 0
 run_style verlet
 run %(RunSteps)d
 
@@ -52,8 +52,6 @@ write_restart %(OutputDataFile)s
 # CLEANUP
 undump trj
 uncompute rg
-uncompute my_pe
-unfix ene
 unfix nvt
 unfix com
 unfix nodrift
