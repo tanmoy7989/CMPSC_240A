@@ -25,7 +25,7 @@ def setNewEnv(currenv):
 		if any(remove): continue
 		else: newenv[k] = v
 	return newenv
- 
+
 
 class MD(rexlib.Replica):
 
@@ -36,10 +36,11 @@ class MD(rexlib.Replica):
 
 		InFile = Prefix + '.in'
 		LogFile = Prefix + '.log'
-		
+
 		d = {'InitDataFile': Files[0], 'TrjFile': Files[1], 'EneFile': Files[2], 'OutputDataFile': Files[3],
-			 'RunSteps': int(RunSteps), 'StepFreq': int(StepFreq), 'Temp': self.Temp}
-		
+		     'RunSteps': int(RunSteps), 'StepFreq': int(StepFreq), 'Temp': self.Temp,
+		     'ForceFieldFile': os.path.abspath('../lammpsdata/impw.table'), 'FFType': 'WCA'}
+
 		s = file(LammpsTemplate).read()
 		file(InFile, 'w').write(s % d)
 
@@ -73,19 +74,24 @@ class MD(rexlib.Replica):
 
 
 ### MAIN
-Temps = [270, 300, 400, 500, 600]
 
-EquilSteps = 1000 #1000000
-ProdSteps = 2000 #20000000
-StepFreq = 10 #400
-SwapSteps = 100
-SwapsPerCycle = 1 #5
-DATADIR = os.path.abspath('./test')
-INITFILE = os.path.abspath('../init.data')
+Settings = eval(file(sys.argv[1]).read())
 
-rex = rexlib.REX(ReplicaClass = MD, Temps = Temps, EquilSteps = EquilSteps, ProdSteps = ProdSteps, StepFreq = StepFreq, SwapSteps = SwapSteps, SwapsPerCycle = SwapsPerCycle, 
-				 DATADIR = DATADIR, INITFILE = INITFILE, Verbose = True)
+NReplicas = Settings['NReplicas']
+EquilSteps = Settings['EquilSteps']
+ProdSteps = Settings['ProdSteps']
+StepFreq = Settings['StepFreq']
+SwapFreq = Settings['SwapFreq']
+SwapsPerCycle = Settings['SwapsPerCycle']
+DataDir = Settings['DataDir']
+InitFile = Settings['InitFile']
+
+TempMin = 300
+TempMax = 800
+Temps = rexlib.getTemps(TempMin, TempMax, NReplicas)
+
+rex = rexlib.REX(ReplicaClass = MD, Temps = Temps, EquilSteps = EquilSteps, ProdSteps = ProdSteps, StepFreq = StepFreq, SwapFreq = SwapFreq, SwapsPerCycle = SwapsPerCycle,
+				 DATADIR = DataDir, INITFILE = InitFile, Verbose = True, Profile = True)
 rex.Run()
 
 rex.demux(300)
-

@@ -17,11 +17,12 @@ class MD(rexlib.Replica):
 		LogFile = Prefix + '.log'
 
 		d = {'InitDataFile': Files[0], 'TrjFile': Files[1], 'EneFile': Files[2], 'OutputDataFile': Files[3],
-			 'RunSteps': int(RunSteps), 'StepFreq': int(StepFreq), 'Temp': self.Temp}
-		
+		     'RunSteps': int(RunSteps), 'StepFreq': int(StepFreq), 'Temp': self.Temp,
+		     'ForceFieldFile': os.path.abspath('../lammpsdata/impw.table'), 'FFType': 'LJ' }
+
 		s = file(LammpsTemplate).read()
 		file(InFile, 'w').write(s % d)
-		
+
 		p = subprocess.Popen('%s -in %s -log %s' % (LammpsExec, InFile, LogFile), shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 		p.communicate()
 
@@ -40,9 +41,9 @@ class MD(rexlib.Replica):
 
 ### MAIN
 TempSet = 300.0
-EquilSteps = 1000000
-ProdSteps = 20000000
-StepFreq = 400
+EquilSteps = 1000 #1000000
+ProdSteps = 2000 #20000000
+StepFreq = 1 #400
 INITFILE = os.path.abspath('../init.data')
 
 r = MD(Temp = TempSet)
@@ -54,4 +55,3 @@ r.Run(Files, EquilSteps, StepFreq)
 # prod runs
 Files = ['prodinit.dat', 'prod.trj', 'prod.ene', 'prodout.dat']
 r.Run(Files, ProdSteps, StepFreq)
-

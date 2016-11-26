@@ -7,8 +7,12 @@ atom_style full
 read_restart %(InitDataFile)s
 
 # FORCEFIELD
-pair_style lj/cut 10.00
-pair_coeff 1 1 0.13986 3.73 10.00
+#pair_style lj/cut 10.00
+#pair_coeff 1 1 0.13986 3.73 10.00
+
+pair_style table spline 500
+pair_coeff 1 1 %(ForceFieldFile)s %(FFType)s
+
 pair_modify shift yes		
 bond_style harmonic
 bond_coeff 1 400 1.53

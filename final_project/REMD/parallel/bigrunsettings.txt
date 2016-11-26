@@ -1,0 +1,11 @@
+{
+'NReplicas': 8,
+'NCores': 8,
+'EquilSteps': 1000, #1000000
+'ProdSteps': 2000, #20000000
+'StepFreq': 1, #400
+'SwapFreq': 100,
+'SwapsPerCycle': 2, #5
+'DataDir' : os.path.abspath('./bigrun'),
+'InitFile': os.path.abspath('../init.data'),
+}
