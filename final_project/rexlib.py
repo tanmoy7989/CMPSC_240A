@@ -30,7 +30,7 @@ class Replica(object):
 
 
 class REX(object):
-    def __init__(self, ReplicaClass, Temps = None, EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapSteps = 1000, SwapsPerCycle = 5, 
+    def __init__(self, ReplicaClass, Temps = None, EquilSteps = 2e5, ProdSteps = 2e5, StepFreq = 100, SwapFreq = 1000, SwapsPerCycle = 5,
                  DATADIR = os.getcwd(), INITFILE = 'init.dat', Verbose = False, Profile = False):
         # Initialize MPI
         self.comm = MPI.COMM_WORLD
@@ -43,8 +43,9 @@ class REX(object):
         # Initialize serial code data
         self.ReplicaClass = ReplicaClass
         self.EquilSteps = int(EquilSteps)
-        self.SwapSteps = int(SwapSteps)
-        self.ProdSteps = ProdSteps / SwapSteps
+        self.SwapFreq = int(SwapFreq)
+        self.SwapSteps = int(ProdSteps) / self.SwapFreq
+        self.ProdSteps = self.SwapFreq
         self.StepFreq = int(StepFreq)
         self.SwapsPerCycle = int(SwapsPerCycle)
 
@@ -62,7 +63,7 @@ class REX(object):
         # Profiling
         self.Profile = Profile
         self.ServerTime = 0.0 ; self.RunTime = 0.0 ; self.FetchTime = 0.0
-    
+
         # File system
         self.DATADIR = DATADIR
         self.INITFILE = INITFILE
@@ -71,9 +72,9 @@ class REX(object):
         self.StatFile = os.path.join(self.DATADIR, 'statistics.txt')
         self.WalkFile = os.path.join(self.DATADIR, 'random_walk.txt')
         if self.Profile: self.ProfileFile = os.path.join(self.DATADIR, 'profile.txt')
-        
 
-    
+
+
     def createFileSys(self):
         '''create all necessary files and directories'''
         if not os.path.isdir(self.DATADIR): os.mkdir(self.DATADIR)
@@ -82,7 +83,7 @@ class REX(object):
 
         for rID in range(len(self.Temps)):
             for niter in range(self.SwapSteps):
-                Dir = os.path.join(self.DATADIR, str(rID))              
+                Dir = os.path.join(self.DATADIR, str(rID))
                 if not os.path.isdir(Dir): os.mkdir(Dir)
 
     def get_rFiles(self, rID):
@@ -113,12 +114,12 @@ class REX(object):
         enefile = os.path.join(Dir, str(thisTemp) + '.ene')
 
         # TODO: write this in parallel
-        if self.rank == 0: 
+        if self.rank == 0:
             self.Log('\nDemuxing %g trajectory...' % thisTemp)
             if not os.path.isdir(Dir): os.mkdir(Dir)
             for thisfile in [statefile, enefile]:
-                with open(thisfile, 'w') as of: pass 
-        
+                with open(thisfile, 'w') as of: pass
+
             Ind = self.Temps.index(thisTemp)
             Walk = list(np.loadtxt(self.SwapFile)[:,Ind])
             dummy_r = self.ReplicaClass(Temp = None)
@@ -161,7 +162,7 @@ class REX(object):
         isRunning = []
         isQueued =range(len(self.Ensemble))
 
-        # send off the first batch of jobs in order 
+        # send off the first batch of jobs in order
         for proc in range(1, self.nproc):
             rID = proc - 1
             self.Submit(rID, proc)
@@ -174,7 +175,7 @@ class REX(object):
             self.Log('\nReplica %d on proc %d finished\n' % (rID, proc))
             self.Ene[rID] = rEne
             isRunning.remove(rID)
-            
+
             if self.Profile:
                 self.RunTime += clienttime[0]
                 self.FetchTime += clienttime[1]
@@ -218,13 +219,13 @@ class REX(object):
                 i = np.random.choice(len(self.Ensemble)) ; j = self.getNeigh(i)
                 if acc and acc.__contains__((i,j)) or acc.__contains__((j,i)): continue
                 acc.append((i, j))
-                
+
                 r1 = self.Ensemble[i] ; r2 = self.Ensemble[j]
                 Ene1 = self.Ene[i] ; Ene2 = self.Ene[j]
-                
+
                 Ti = self.Temps.index(r1.Temp) ; Tj = self.Temps.index(r2.Temp)
                 self.allAttempts[min(Ti, Tj)] += 1
-                
+
                 accept = self.MetHast(r1, r2, Ene1, Ene2)
                 if accept:
                     r1.Temp, r2.Temp = r2.Temp, r1.Temp
@@ -271,9 +272,9 @@ class REX(object):
 
     def Parent(self):
         '''server that conducts all the replica exchanges'''
-        
+
         self.createFileSys()
-        
+
         for i in range(len(self.Temps)):
             self.Ensemble.append(self.ReplicaClass(self.Temps[i]))
             self.Ene.append(0.0)
@@ -305,17 +306,17 @@ class REX(object):
         while True:
             r, rID, rFiles, RunSteps = self.comm.recv(source = 0, tag = MPI.ANY_TAG, status = self.status)
             if self.status.Get_tag() == self.SIGKILL: break
-            
+
             t1 = time.time() if self.Profile else None
-            
+
             r.Run(rFiles, RunSteps, self.StepFreq)
-            
+
             t2 = time.time() if self.Profile else None
 
             rEne = r.getEne(rFiles[2])
 
             t3 = time.time() if self.Profile else None
-            
+
             if self.Profile:
                 runtime = t2 - t1
                 fetchtime = t3 - t2
