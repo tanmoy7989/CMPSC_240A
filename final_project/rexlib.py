@@ -186,10 +186,6 @@ class REX(object):
                     isRunning.append(rID)
                     isQueued.remove(rID)
 
-            if self.Profile:
-                self.FetchTime /= float(self.nproc - 1)
-                self.RunTime /= float(self.nproc - 1)
-
 
 
     def MetHast(self, r1, r2, Ene1, Ene2):
@@ -294,7 +290,11 @@ class REX(object):
 
         self.getStats()
 
-        if self.Profile: self.writeProfile()
+        if self.Profile:
+            self.RunTime /= self.SwapSteps
+            self.FetchTime /= self.SwapSteps
+            self.ServerTime /= self.Swapsteps
+            self.writeProfile()
 
         # disconnect all clients
         for proc in range(1, self.nproc):
