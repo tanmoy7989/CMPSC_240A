@@ -1,67 +1,66 @@
 #!/usr/bin/env python
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-def get_observed(filename):
+def get_time(filename):
     data = np.loadtxt(filename)
-    t1 = np.array([], float64)
-    tp = np.array([], float64)
-    p = np.array([], int32)
-    r = np.array([], int32)
-    for i,x in enumerate(data):
-        r = np.append(r, x[0])
-        p = np.append(p, x[1])
-        t1 = np.append(t1, x[2] + x[3] + x[4])
-        tp = np.append(tp, x[5] + x[6] + x[7])
-        return (r, p, t1, tp)
-
-def get_theoretical(filename):
-    data = np.loadtxt(filename)
-    t1 = np.array([], float64)
-    tp = np.array([], float64)
-    p = np.array([], int32)
-    r = np.array([], int32)
+    t_server = []
+    t_MD = []
+    t_fetch = []
+    p = []
+    r = []
     for i, x in enumerate(data):
-        r = np.append(r, x[0])
-        p = np.append(p, x[1])
-        t1 = np.append(t1, x[5] + x[6])
-        tp = np.append(tp, x[5] + (x[6] + x[7]) / float(x[1]) )
-    return (r, p, t1, tp)
+        r.append(x[0])
+        p.append(x[1])
+        t_server.append(x[2])
+        t_MD.append(x[3])
+        t_fetch.append(x[4])
+    return (r, p, t_server, t_MD, t_fetch)
 
 def plot(scaletype = 'rscale'):
 
     if scaletype == 'rscale':
-        datafilename = 'rscale.txt'
+        datafilename = os.path.abspath('./profile/rscale.txt')
         xlabel = 'number of replicas'
         figname = 'rscale.png'
     elif scaletype == 'pscale':
-        datafilename = 'pscale.txt'
+        datafilename = os.path.abspath('./profile/pscale.txt')
         xlabel = 'number of processors'
         figname = 'pscale.png'
 
     fig = plt.figure(figsize = (10, 5), facecolor = 'w', edgecolor = 'w')
-    ro, po, t1o, tpo = get_observed(datafilename)
-    rt, pt, t1t, tpt = get_theoretical(datafilename)
+    
+    r, p, t_server, t_MD, t_fetch = get_time(datafilename)
 
-    if scaletype == 'rscale': x = (ro, rt)
-    elif scaletype == 'pscale': x = (po, pt)
+    if scaletype == 'rscale':
+        x = r
+        lbl = 'N_proc = ' + str(int(p[0]))
+    elif scaletype == 'pscale':
+        x = p
+        lbl = 'N_replica = ' + str(int(r[0]))
+    
+    speedup = np.zeros(len(x), np.float64)
+    runtime = np.zeros(len(x), np.float64)
+    for i in range(len(x)):
+        runtime[i] = t_server[i] + t_MD[i] / float(p[i]) + t_fetch[i]
+        speedup[i] = (t_server[i] + t_MD[i]) / (t_server[i] + t_MD[i] / float(p[i]) + t_fetch[i])
+
 
     ax1 = fig.add_subplot(1, 2, 1)
-    ax1.semilogx(x[0], tpo, basex = 2, 'ro', linestyle = 'none', markersize = 6, legend = 'observed')
-    ax1.semilogx(x[1], tpt, basex = 2, 'k-', linedwidth = 3, legend = 'theoretical')
+    ax1.semilogx(x, runtime, 'k-', basex = 2, linewidth = 3, marker = 'o', color = 'red', markersize = 8, label = lbl)
     ax1.set_xlabel(xlabel, fontsize = 20)
     ax1.set_ylabel('run time', fontsize = 20)
-    ax1.legend(loc = 'best', prop = {'size': 15})
     ax1.grid(True)
+    ax1.legend(loc = 'best', prop = {'size': 15})
 
     ax2 = fig.add_subplot(1, 2, 2)
-    ax2.semilogx(x[0], t1o/tpo, basex = 2, 'ro', linestyle = 'none', markersize = 6, legend = 'observed')
-    ax2.semilogx(x[1], t1t/tpt, basex = 2, 'k-', linewidth = 3, legend = 'theoretical')
+    ax2.semilogx(x, speedup, 'k-', basex = 2, linewidth = 3, marker = 'o', color = 'red', markersize = 8)
     ax2.set_xlabel(xlabel, fontsize = 20)
     ax2.set_ylabel('speedup', fontsize = 20)
-    ax2.legend(loc = 'best', prop = {'size': 15})
     ax2.grid(True)
 
+    plt.tight_layout()
     plt.savefig(figname)
 
 

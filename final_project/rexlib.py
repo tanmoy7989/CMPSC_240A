@@ -106,9 +106,12 @@ class REX(object):
 
         return files
 
-    def demux(self, thisTemp):
+    def demux(self, Ind):
         '''demultiplexer to concatenate all state files at a given temperature.
            This is written in parallel since the state and ene files for each replica may be large'''
+        
+        thisTemp = int(self.Temps[Ind])
+        
         Dir = os.path.join(self.DATADIR, str(thisTemp) + 'K')
         statefile = os.path.join(Dir, str(thisTemp) + '.trj')
         enefile = os.path.join(Dir, str(thisTemp) + '.ene')
@@ -120,7 +123,6 @@ class REX(object):
             for thisfile in [statefile, enefile]:
                 with open(thisfile, 'w') as of: pass
 
-            Ind = self.Temps.index(thisTemp)
             Walk = list(np.loadtxt(self.SwapFile)[:,Ind])
             dummy_r = self.ReplicaClass(Temp = None)
             self.niter = 0
@@ -163,7 +165,7 @@ class REX(object):
         isQueued =range(len(self.Ensemble))
 
         # send off the first batch of jobs in order
-        for proc in range(1, self.nproc):
+        for proc in range( 1, min( self.nproc, len(self.Ensemble)+1 ) ):
             rID = proc - 1
             self.Submit(rID, proc)
             isRunning.append(rID)
@@ -293,7 +295,7 @@ class REX(object):
         if self.Profile:
             self.RunTime /= self.SwapSteps
             self.FetchTime /= self.SwapSteps
-            self.ServerTime /= self.Swapsteps
+            self.ServerTime /= self.SwapSteps
             self.writeProfile()
 
         # disconnect all clients

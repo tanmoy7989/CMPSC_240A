@@ -33,14 +33,13 @@ if makeMovie:
 	fig = plt.figure(figsize = (10,5), facecolor = 'w', edgecolor = 'w')
 	nframes = 200
 	framestep = int(len(pos) / nframes)
-	for i in range(len(pos)):
-		if i % framestep: continue
+	for i in range(nframes):
 		
 		print "Rendering snapshot", i
 
-		timeslice = range(i)
-		posslice = pos[:i]
-		eneslice = ene[:i]
+		timeslice = range(i*framestep)
+		posslice = pos[:i*framestep]
+		eneslice = ene[:i*framestep]
 
 		ax1 = fig.add_subplot(1,2,1)
 		ax1.plot(np.linspace(0,60,10), np.zeros(10), linestyle = 'solid', color = 'black')
@@ -50,19 +49,17 @@ if makeMovie:
 
 		ax2 = fig.add_subplot(1,2,2)
 		ax2.plot(pos_known, ene_known, 'k-', linewidth = 3, label = 'Exact')
-		ax2.plot(posslice, eneslice, linestyle = 'none', color = 'red', marker = 'o', markersize = 5, label = 'Monte Carlo')
+		ax2.plot(posslice, eneslice, linestyle = 'none', color = 'red', marker = 'o', markersize = 5, label = 'Replica Exchange Monte Carlo')
 		if i == 0:
 			ax2.set_xlabel(r'$x$', fontsize = 20); ax2.set_ylabel(r'$E(x)$', fontsize = 20)
-			ax2.legend(loc = 'best', prop = {'size': 15})
+			ax2.legend(loc = 'best', prop = {'size': 9})
 		ax2.hold(True)
 	
 		plt.tight_layout()
-		plt.savefig( 'frame_%d.png' % (int(i/framestep) + 1) )
+		plt.savefig( 'frame_%d.png' % i )
 
 	cmdstring = 'avconv -i "frame_%d.png" -r 10 -c:v libx264 -crf 10 -pix_fmt yuv420p ' + Prefix + '.avi'
 	os.system(cmdstring)
-
-	for i in range(len(pos)):
-		if i % framestep: continue
-		os.remove( 'frame_%d.png' % (int(i/framestep) + 1) )
+	
+	os.system('rm frame*.png')
 

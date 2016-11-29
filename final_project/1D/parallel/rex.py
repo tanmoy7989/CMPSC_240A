@@ -45,12 +45,12 @@ class myReplica(rexlib.Replica):
 
 ### MAIN
 INITFILE = os.path.abspath('../init.dat')
-DATADIR = os.path.abspath('./comp')
-Temps = [200, 300, 400, 500, 600]
-rex = rexlib.REX(ReplicaClass = myReplica, Temps = Temps, EquilSteps = 1e4, ProdSteps = 2e4, StepFreq = 10, SwapSteps = 200, SwapsPerCycle = 5,
+DATADIR = os.path.abspath('./test')
+Temps = rexlib.getTemps(270, 1000, 24) ; print Temps
+rex = rexlib.REX(ReplicaClass = myReplica, Temps = Temps, EquilSteps = 10000, ProdSteps = 20000, StepFreq = 1, SwapFreq = 100, SwapsPerCycle = 2,
 				 Verbose = False, Profile = True, DATADIR = DATADIR, INITFILE = INITFILE)
 
 rex.Run()
 
-rex.demux(300)
+rex.demux(3)
 

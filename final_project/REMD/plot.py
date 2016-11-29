@@ -75,6 +75,7 @@ if makeMovie:
 	framestep = int(len(measure) / nframes)
 
 	renderVMD(framestep)
+	
 
 	for i in range(nframes):
 		
@@ -99,9 +100,7 @@ if makeMovie:
 	cmdstring = 'avconv -i "frame_%03d.png" -r 10 -c:v libx264 -crf 10 -pix_fmt yuv420p ' + Prefix + '.avi'
 	os.system(cmdstring)
 
-	for i in range(nframes):
-		os.remove('frame_%03d.png' % i)
-		os.remove('posframe_%03d.tga' % i)
+	os.system('rm posframe*.tga frame*.png')
 
 
 	

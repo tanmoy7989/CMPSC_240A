@@ -47,9 +47,9 @@ class myReplica(rexlib.Replica):
 
 ### MAIN
 TempSet = 300.0
-EquilSteps = 1e4
-ProdSteps = 2e4
-StepFreq = 10
+EquilSteps = 1000
+ProdSteps = 2000
+StepFreq = 1
 
 r = myReplica(Temp = TempSet)
 
