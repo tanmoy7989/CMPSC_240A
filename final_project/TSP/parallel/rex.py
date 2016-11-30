@@ -2,11 +2,13 @@
 import os, sys, random, copy
 import numpy as np
 
-sys.path.append(os.path.abspath('../')) ; import rexlib
+sys.path.append(os.path.abspath('../../')) ; import rexlib
 
-coords = np.loadtxt('p01_xy.txt', skiprows = 1) 
-dist = np.loadtxt('p01_d.txt', skiprows = 1)
+coords = np.loadtxt('../p01_xy.txt', skiprows = 1) 
+dist = np.loadtxt('../p01_d.txt', skiprows = 1)
 ncities = len(coords)
+
+isGreedy = False
 
 def Efunc(tour):
 	return sum( [ dist[tour[i], tour[i+1] ] for i in range(ncities-1) ] )
@@ -23,7 +25,7 @@ class TSP(rexlib.Replica):
 
 		tour = [int(x) for x in np.loadtxt(InitDataFile)]
 		Ene = Efunc(tour)
-		MAXSWAP = 5
+		MAXSWAP = 3
 
 		# write initial co-ordinate
 		file(StateFile, 'a').write(tour2str(tour))
@@ -42,18 +44,24 @@ class TSP(rexlib.Replica):
 				if isSwapped and ( isSwapped.__contains__((ii, jj)) or isSwapped.__contains__((jj, ii)) ): continue
 				tour_new[ii], tour_new[jj] = tour_new[jj], tour_new[ii]
 			
-			n1 = min(ii,jj) ; n2 = max(ii, jj)
-			n0 = n1 -1 if n1 > 0 else -1
-			n3 = n2 + 1 if n2 < ncities - 1 else ncities
-			d1 = dist[tour[n0], tour[n1]] if n0 > 0 else 0
-			d2 = dist[tour[n2], tour[n3]] if n3 < ncities - 1 else 0
-			d3 = dist[tour[n0], tour[n2]] if n0 > 0 else 0
-			d4 = dist[tour[n1], tour[n3]] if n3 < ncities - 1 else 0
-			Ene_new = Ene - d1 - d2 + d3 + d4
+			#TODO: O(n) way to calculate new energy
+			#n1 = min(ii,jj) ; n2 = max(ii, jj)
+			#n0 = n1 -1 if n1 > 0 else -1
+			#n3 = n2 + 1 if n2 < ncities - 1 else ncities
+			#d1 = dist[tour[n0], tour[n1]] if n0 > 0 else 0
+			#d2 = dist[tour[n2], tour[n3]] if n3 < ncities - 1 else 0
+			#d3 = dist[tour[n0], tour[n2]] if n0 > 0 else 0
+			#d4 = dist[tour[n1], tour[n3]] if n3 < ncities - 1 else 0
+			#Ene_new = Ene - d1 - d2 + d3 + d4
+			
+			Ene_new = Efunc(tour_new)
+			assert Ene_new >= 0.0
 			
 			Delta = (Ene_new - Ene) / (self.kB * self.Temp)
 			pacc = min(1.0, np.exp(-Delta))
-			if pacc > random.random():
+			
+			criterion = (pacc > random.random()) if not isGreedy else (Ene_new < Ene)
+			if criterion:
 				tour = tour_new
 				Ene = Ene_new
 			
@@ -66,21 +74,11 @@ class TSP(rexlib.Replica):
 		for thisfile in Files: file(thisfile, 'r').close()
 
 
+
 ### MAIN
-TempSet = 10.0
 str_tour0 = tour2str(range(ncities)) ; file('init.dat', 'w').write(str_tour0)
-
-EquilSteps = 1e3
-ProdSteps = 2e3
-StepFreq = 10
-
-r = TSP(Temp = TempSet)
-
-# equil runs
-Files = ['init.dat', 'equil.trj', 'equil.ene', 'prod.dat']
-r.Run(Files, EquilSteps, StepFreq)
-
-# prod runs
-Files = ['prod.dat', 'prod.trj', 'prod.ene', 'prod1.dat']
-r.Run(Files, ProdSteps, StepFreq)
+Temps = rexlib.getTemps(10, 100, 8)
+rex = rexlib.REX(ReplicaClass = TSP, Temps = Temps, EquilSteps = 100, ProdSteps = 200000, StepFreq = 10, SwapFreq = 100, SwapsPerCycle = 5, DATADIR = os.path.abspath('./test'), Verbose = True)
+rex.Run()
+rex.demux(0)
 
